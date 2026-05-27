@@ -6,7 +6,7 @@ import type { ManifestEntry } from "./types";
 
 export const REGISTRY_REPO =
   (import.meta.env["VITE_LIBRARY_REGISTRY_REPO"] as string | undefined) ??
-  "scribbly/scribbly-libraries";
+  "wissamyah/scribbly-libraries";
 
 // Public source view for a single library's submission directory.
 export function viewSourceUrl(entry: ManifestEntry): string {
