@@ -24,6 +24,9 @@ type Props = {
   // Called with the new library's id after a successful install so the
   // sidebar can switch tabs back and highlight what was just added.
   onInstalled: (libraryId: string) => void;
+  // Opens the guided "Submit to gallery" flow. The sidebar owns the dialog
+  // state because the same flow is reachable from My libraries too.
+  onSubmitClick: () => void;
   initialEntry?: ManifestEntry | null;
   onInitialEntryConsumed?: () => void;
 };
@@ -37,6 +40,7 @@ export function BrowseTab({
   ownerKey,
   installedLibraries,
   onInstalled,
+  onSubmitClick,
   initialEntry,
   onInitialEntryConsumed,
 }: Props) {
@@ -161,6 +165,19 @@ export function BrowseTab({
 
   return (
     <div className={styles.browse}>
+      <div className={styles.browseSubmit}>
+        <span>
+          <strong>Built something good?</strong> Share it with everyone.
+        </span>
+        <button
+          type="button"
+          className={styles.browseSubmitLink}
+          onClick={onSubmitClick}
+        >
+          Submit your own →
+        </button>
+      </div>
+
       <div className={styles.browseControls}>
         <input
           type="search"

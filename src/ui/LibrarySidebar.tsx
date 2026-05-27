@@ -28,6 +28,7 @@ import { useAppState } from "../store/appState";
 import { BrowseTab } from "./BrowseTab";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PromptDialog } from "./PromptDialog";
+import { SubmitLibraryDialog } from "./SubmitLibraryDialog";
 import styles from "./LibrarySidebar.module.scss";
 
 function BookIcon() {
@@ -84,6 +85,14 @@ function UploadIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 20V8M6 13l6-6 6 6M4 4h16" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 4h6v6M20 4L10 14M18 14v6H4V6h6" />
     </svg>
   );
 }
@@ -244,6 +253,17 @@ function SidebarBody({
     tone?: "default" | "danger";
     onConfirm: () => void;
   } | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+
+  const handleOpenSubmit = () => {
+    if (!activeLibrary) {
+      // Browse-tab entry: nudge user back to My libraries so they can pick one.
+      setTab("my");
+      setToast("Pick or create a library, then click Submit to gallery");
+      return;
+    }
+    setSubmitOpen(true);
+  };
 
   useEffect(() => setKeyDraft(ownerKey), [ownerKey]);
 
@@ -448,6 +468,7 @@ function SidebarBody({
             setTab("my");
             setActiveLibraryId(id);
           }}
+          onSubmitClick={handleOpenSubmit}
           initialEntry={pendingMarketplaceEntry as ManifestEntry | null}
           onInitialEntryConsumed={clearPendingMarketplaceEntry}
         />
@@ -598,6 +619,24 @@ function SidebarBody({
         />
       </div>
 
+      <button
+        type="button"
+        className={`${styles.button} ${styles.submitButton}`}
+        onClick={handleOpenSubmit}
+        disabled={!activeLibrary || items.length === 0}
+        title={
+          activeLibrary && items.length > 0
+            ? "Share this library in the public gallery"
+            : "Add at least one item before submitting"
+        }
+      >
+        <ShareIcon />
+        Submit to gallery
+      </button>
+      <div className={styles.submitHelp}>
+        Share your library with everyone — a maintainer reviews it on GitHub.
+      </div>
+
       <div className={styles.divider} />
 
       <div className={styles.section}>
@@ -666,6 +705,13 @@ function SidebarBody({
           confirmConfig?.onConfirm();
           setConfirmConfig(null);
         }}
+      />
+
+      <SubmitLibraryDialog
+        open={submitOpen}
+        library={activeLibrary}
+        items={items}
+        onClose={() => setSubmitOpen(false)}
       />
     </div>
   );

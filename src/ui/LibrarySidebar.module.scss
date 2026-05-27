@@ -373,6 +373,71 @@
   margin: 4px 0;
 }
 
+.submitButton {
+  flex: none;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--accent);
+  color: var(--text-on-accent, #ffffff);
+  border-color: var(--accent);
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.05);
+    background: var(--accent);
+  }
+
+  &:disabled {
+    background: var(--surface-2);
+    color: var(--text-3);
+    border-color: var(--border-1);
+  }
+}
+
+.submitHelp {
+  font-size: 10px;
+  color: var(--text-3);
+  line-height: 1.4;
+  margin-top: -4px;
+}
+
+.browseSubmit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-1);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.4;
+
+  strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+}
+
+.browseSubmitLink {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
 .keyRow {
   display: flex;
   gap: 6px;

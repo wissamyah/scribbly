@@ -33,20 +33,41 @@ export function buildLibraryFile(
   };
 }
 
+function triggerDownload(filename: string, body: string): void {
+  const blob = new Blob([body], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke async — some browsers race the click handler.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function downloadLibraryFile(
   library: ScribblyLibrary,
   items: readonly LibraryItem[],
 ): void {
   const file = buildLibraryFile(library, items);
   const json = JSON.stringify(file, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${sanitizeFilename(library.name)}${LIBRARY_FILE_EXT}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Revoke async — some browsers race the click handler.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerDownload(
+    `${sanitizeFilename(library.name)}${LIBRARY_FILE_EXT}`,
+    json,
+  );
+}
+
+// Same payload as downloadLibraryFile, but saved with a `.json` extension.
+// GitHub's issue attachment uploader rejects unknown extensions like
+// `.scribblylib`, so the submission flow uses this variant. Round-trip is
+// safe: importLibrary parses any JSON text and the file's `type` field is
+// what actually identifies it as a Scribbly library.
+export function downloadLibraryFileAsJson(
+  library: ScribblyLibrary,
+  items: readonly LibraryItem[],
+): void {
+  const file = buildLibraryFile(library, items);
+  const json = JSON.stringify(file, null, 2);
+  triggerDownload(`${sanitizeFilename(library.name)}.scribblylib.json`, json);
 }
