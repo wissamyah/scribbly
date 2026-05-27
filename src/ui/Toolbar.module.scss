@@ -1,0 +1,80 @@
+.toolbar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+.button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: relative;
+
+  &:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  &.active {
+    background: var(--surface-accent);
+    border-color: transparent;
+    color: var(--text-active);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+    color: var(--text-muted);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-1);
+  margin: 4px 2px;
+  flex-shrink: 0;
+}
+
+.shortcut {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1;
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+.button.active .shortcut {
+  color: var(--accent-muted);
+}

@@ -1,0 +1,66 @@
+.dock {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: 10px;
+  padding: 3px;
+  box-shadow: var(--shadow-md);
+}
+
+.button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  height: 30px;
+  min-width: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 500;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  &:disabled {
+    color: var(--text-disabled);
+    cursor: default;
+  }
+}
+
+.modeChip {
+  background: var(--surface-accent);
+  color: var(--accent-text);
+
+  &:hover:not(:disabled) {
+    background: var(--surface-accent-hover);
+  }
+}

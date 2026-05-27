@@ -1,0 +1,18 @@
+.editor {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-fallback-edit);
+  caret-color: currentColor;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  line-height: 1.2;
+  min-width: 1px;
+  font-family: Virgil, "Comic Sans MS", cursive;
+  box-sizing: border-box;
+}

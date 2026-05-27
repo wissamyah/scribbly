@@ -1,0 +1,23 @@
+{
+  "name": "@scribbly/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure element-drawing primitives shared between the Scribbly app and the marketplace registry. No React, no InstantDB, no Zustand.",
+  "scripts": {
+    "build": "echo 'renderer is source-only; nothing to build' && exit 0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./constants": "./src/constants.ts",
+    "./math": "./src/math.ts",
+    "./geometry": "./src/geometry.ts",
+    "./theme": "./src/theme.ts",
+    "./draw": "./src/draw.ts",
+    "./renderItem": "./src/renderItem.ts"
+  },
+  "peerDependencies": {
+    "roughjs": "^4.6.4"
+  }
+}
