@@ -14,7 +14,8 @@ export type ToolName =
   | "text"
   | "eraser"
   | "laser"
-  | "frame";
+  | "frame"
+  | "shape3d";
 
 export type TextDraft = {
   worldX: number;
@@ -33,12 +34,14 @@ export type ToolContext = {
   setDraft: (el: ScribblyElement | null) => void;
   getDraft: () => ScribblyElement | null;
   addElement: (el: ScribblyElement) => void;
+  addElements: (els: readonly ScribblyElement[]) => void;
   setActiveTool: (tool: ToolName) => void;
   setTextDraft: (draft: TextDraft | null) => void;
 
   getView: () => ViewTransform;
   getElements: () => readonly ScribblyElement[];
   updateElements: (ids: readonly string[], patcher: ElementPatcher) => void;
+  deleteElements: (ids: readonly string[]) => void;
   getSelectedIds: () => readonly string[];
   setSelectedIds: (ids: readonly string[]) => void;
   setSelectionBox: (box: BBox | null) => void;

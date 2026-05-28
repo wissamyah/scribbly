@@ -5,12 +5,15 @@ import { LIBRARY_SOURCE_URL } from "./types";
 
 export type CreateLibraryInput = {
   ownerKey: string;
+  // Auth uid when a signed-in user creates/installs the library. Stored so
+  // the library follows the account across devices (queried by userId).
+  userId?: string;
   name: string;
   isPublic?: boolean;
   source?: string;
-  // Marketplace provenance. Set when this library was installed from a
-  // registry; the "Update available" banner compares sourceVersion against
-  // the manifest entry. Leave undefined for locally-authored libraries.
+  // Gallery provenance. Set when this library was installed from the
+  // gallery; the "Update available" banner compares sourceVersion against
+  // the gallery entry. Leave undefined for locally-authored libraries.
   sourceSlug?: string;
   sourceVersion?: string;
 };
@@ -20,6 +23,7 @@ export function createLibrary(input: CreateLibraryInput): string {
   const now = Date.now();
   const payload: {
     ownerKey: string;
+    userId?: string;
     name: string;
     isPublic: boolean;
     source: string;
@@ -35,6 +39,7 @@ export function createLibrary(input: CreateLibraryInput): string {
     createdAt: now,
     updatedAt: now,
   };
+  if (input.userId) payload.userId = input.userId;
   if (input.sourceSlug) payload.sourceSlug = input.sourceSlug;
   if (input.sourceVersion) payload.sourceVersion = input.sourceVersion;
   db.transact(db.tx.libraries[libId]!.update(payload));

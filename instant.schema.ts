@@ -75,6 +75,10 @@ const _schema = i.schema({
       endArrowhead: i.string(),
       // Only text elements set this; rectangles/ellipses/etc. leave it null.
       containerId: i.string().indexed().optional(),
+      // True for closed-polygon line elements. Lets the renderer fill the
+      // interior with backgroundColor/fillStyle and the hit-test treat the
+      // interior as a hit. Absent for plain open lines.
+      closed: i.boolean().optional(),
       // When set, the row's semantic fields above are zeroed out and the
       // real payload is encrypted here. `id`, `roomId`, `isDeleted`,
       // `version`, `updatedAt`, `zIndex` stay plain so the query layer
@@ -84,15 +88,20 @@ const _schema = i.schema({
     }),
     libraries: i.entity({
       ownerKey: i.string().indexed(),
+      // Auth uid when this library belongs to a signed-in account. Signed-in
+      // users query by `userId` so libraries follow the account across
+      // devices; anonymous users still query by `ownerKey`. Set on the
+      // local key's libraries by the first-sign-in migration.
+      userId: i.string().optional().indexed(),
       name: i.string(),
       isPublic: i.boolean(),
       source: i.string(),
       createdAt: i.number(),
       updatedAt: i.number(),
-      // Marketplace provenance. Set when a library was installed from
-      // libraries.scribbly.app (or another registry); empty for libraries
-      // the user authored locally. Drives the "Update available" banner —
-      // compare `sourceVersion` against the manifest entry's `version`.
+      // Gallery provenance. Set when a library was installed from the
+      // in-app gallery; empty for libraries the user authored locally.
+      // Drives the "Update available" banner — compare `sourceVersion`
+      // against the gallery entry's `version`.
       sourceSlug: i.string().optional(),
       sourceVersion: i.string().optional(),
     }),
@@ -101,6 +110,37 @@ const _schema = i.schema({
       name: i.string(),
       elements: i.json(),
       preview: i.string(),
+      createdAt: i.number(),
+    }),
+    // Published-to-the-gallery libraries. `ownerId` is the auth uid of the
+    // submitter (server-verified in perms). Submissions start `pending` and
+    // are made `published` (or `rejected`) by an admin in the in-app review
+    // queue. The full .scribblylib payload is stored inline so install is a
+    // pure DB read — no CDN fetch or SHA verification.
+    galleryLibraries: i.entity({
+      ownerId: i.string().indexed(),
+      slug: i.string().unique().indexed(),
+      name: i.string(),
+      description: i.string(),
+      tags: i.json(),
+      license: i.string(),
+      authorHandle: i.string(),
+      itemCount: i.number(),
+      coverPreview: i.string(),
+      payload: i.json(),
+      status: i.string().indexed(),
+      rejectionNote: i.string().optional(),
+      version: i.number(),
+      createdAt: i.number(),
+      updatedAt: i.number(),
+      publishedAt: i.number().optional(),
+    }),
+    galleryReports: i.entity({
+      reporterId: i.string().indexed(),
+      librarySlug: i.string().indexed(),
+      reason: i.string(),
+      detail: i.string().optional(),
+      resolved: i.boolean().indexed(),
       createdAt: i.number(),
     }),
   },

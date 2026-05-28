@@ -468,186 +468,63 @@ Then a single `db.transact([...])` batches all inserts. Use the standard 300 ms 
 
 ---
 
-## Post-MVP: Library Marketplace (Community Gallery)
+## Post-MVP: Library Gallery (web-based, replaces the GitHub registry)
 
-> Ship after the personal-library slice (steps 15–23) is stable. Goal: let anyone browse and one-click install community-curated `.scribblylib` packs from inside Scribbly, **without introducing auth, a backend, or moderation staff Scribbly has to pay for**.
+> **Update — web-based rewrite.** The community gallery is now a self-contained, in-app system backed by InstantDB with magic-code sign-in. The earlier GitHub PR–based registry (the `scribbly-libraries` repo, static `libraries.json`, Issue-Form submissions, CDN + SHA-256 install) has been **removed**. This section is the single source of truth for the gallery.
 
-### Why a PR-based registry (and not a free-for-all upload form)
+### Scoped authentication (deliberate deviation from "no auth")
 
-Excalidraw runs the same model and it is the only sane spam control for an unauthenticated app:
+The MVP "no authentication" rule still holds for the **canvas and rooms** — a room is reachable by URL slug with no login. Auth applies **only to the gallery**, via InstantDB magic codes (`db.auth.sendMagicCode` / `signInWithMagicCode` / `useAuth`). It exists because identity is the spam wall the old design outsourced to GitHub.
 
-- No login → no rate limit, no abuse signal, no takedown lever besides removing the content.
-- A public upload endpoint without those levers becomes a porn/malware/scam host within a week.
-- GitHub already gives us identity (the PR author), free hosting (Pages or raw content), free CI (Actions), and free moderation tooling (PR review + revert).
+- **Browse + install:** open to everyone, no account.
+- **Submit / manage your submissions / report:** require sign-in.
+- **Admin (review queue + reports):** allowlisted emails hardcoded in `instant.perms.ts` (mirrored in `VITE_ADMIN_EMAILS` for client UI visibility only).
 
-So the marketplace is a **separate public GitHub repo** — `scribbly-libraries` — that holds approved `.scribblylib` files and a generated `libraries.json` manifest. Scribbly's in-app gallery is a read-only client over that manifest. No new server, no DB tables, no admin panel.
+### Moderation: review queue
 
-### Submission flow (the spam wall is the PR review)
+Submissions are created `status: "pending"` and stay out of public Browse until an **admin approves** (`published`) or rejects with a note (`rejected`) in the in-app **Review** tab. Editing a submission bumps `version` and resets it to `pending` for re-review. Permissions forbid non-admins from setting `status` to `published` or touching `publishedAt`.
 
-1. Author exports a `.scribblylib` from Scribbly.
-2. Author opens a PR in `scribbly-libraries` adding two files under `submissions/<github-handle>/<library-slug>/`:
-   - `library.scribblylib` — the file itself
-   - `meta.yaml` — human-edited metadata (name, description, tags, license, homepage)
-3. CI runs `validate.ts`:
-   - JSON Schema validation against `.scribblylib` v1 + meta schema
-   - **Hard rejects** any submission that fails any of the **automated rules** below — the maintainer never even sees malformed PRs.
-4. Maintainer reviews remaining PRs against the **content guidelines** (subjective rules below). Approves or requests changes.
-5. On merge, a release Action regenerates `libraries.json`, renders missing `preview.png` files, writes a SHA-256 to each entry, and publishes to `https://libraries.scribbly.app/` (GitHub Pages).
+### Account-synced personal libraries
 
-Author identity = GitHub handle. Removal = revert PR + republish manifest. Reports = pre-filled GitHub issue, accessible from a "Report" button in the gallery.
+Signed-in users' personal libraries are scoped to their account (`libraries.userId`) and follow them across devices; anonymous users keep the localStorage `ownerKey`. On first sign-in the sidebar offers a one-time migration that stamps the local key's libraries with the account `userId`. `.scribblylib` file export/import remains for portability.
 
-### Automated rules (CI rejects before human review)
+### Schema (InstantDB)
 
-| Rule | Enforced by |
-|---|---|
-| File parses as valid JSON | `JSON.parse` |
-| Matches `.scribblylib` v1 JSON Schema | `ajv` |
-| File size ≤ 512 KB | `fs.statSync` |
-| Each `libraryItems[].elements` is self-contained (no dangling `boundElements` / group ids) | `validate.ts` |
-| ≥ 3 items per library | length check |
-| Each item ≥ 2 elements **or** a non-trivial single element (text > 0 chars, freedraw with > 10 points, etc.) | `validate.ts` — blocks "library of single arrows" submissions |
-| All `seed` values are integers | type check |
-| All text content passes `is-english` (basic Latin + common punctuation, ≥ 90% characters) | regex |
-| `meta.yaml` declares a valid SPDX license id from an allowlist: `MIT`, `Apache-2.0`, `CC0-1.0`, `CC-BY-4.0`, `CC-BY-SA-4.0` | SPDX check |
-| `meta.yaml.name` ≤ 60 chars; `description` ≤ 280 chars; ≤ 8 tags from a controlled vocabulary | string checks |
-| Slug `<github-handle>/<library-slug>` is unique and not previously used by a different handle | filesystem + git history |
-| No binary blobs other than the optional embedded preview PNG in the `.scribblylib` | type check on JSON values |
+- `galleryLibraries`: `ownerId` (auth uid), `slug` (unique), `name`, `description`, `tags` (json), `license`, `authorHandle`, `itemCount`, `coverPreview` (data URL), `payload` (full `.scribblylib` content — install is a pure DB read, no CDN/SHA), `status` (`pending`|`published`|`rejected`), `rejectionNote?`, `version`, timestamps, `publishedAt?`.
+- `galleryReports`: `reporterId`, `librarySlug`, `reason`, `detail?`, `resolved`, `createdAt`.
+- `libraries.userId?` added for account-sync.
 
-### Content guidelines (subjective — human review)
+### Permissions (`instant.perms.ts`)
 
-Borrowed from Excalidraw's published rules, tightened slightly:
+- `galleryLibraries` — view: published OR owner OR admin. create: signed-in, own `ownerId`, forced `pending`. update: admin, or owner (status may only become `pending`; never `publishedAt`). delete: owner or admin.
+- `galleryReports` — create: signed-in, own `reporterId`. view/update/delete: admin only.
+- `rooms` / `elements` / `libraries` / `libraryItems` stay open (`"true"`) — unchanged trust model.
 
-1. **English only** in titles, descriptions, tags, and any in-item text labels.
-2. **Original work** or clearly attributed remix with permission compatible with the declared license. No copies of other published libraries without significant added value.
-3. **Broad utility** — the library is useful to someone who is not the author. Pure personal-use libraries (your team's org chart, your D&D campaign map) are out.
-4. **Thematic coherence** — items in one library belong together. Mixed-bag libraries are split or rejected.
-5. **Grouped items** — multi-element items must be saved as groups so they insert as a single unit. (Validator can't always tell intent; reviewer enforces.)
-6. **No trivially reproducible content** — single arrows, single rectangles, single text labels. The validator's "non-trivial" check catches the obvious cases; the reviewer catches the rest.
-7. **Safe content** — no porn, gore, hate symbols, real-person likenesses without consent, brand logos used in misleading ways, or content designed to deceive (fake UI mocking real bank login pages, etc.). Removal is unilateral.
-
-These live in `CONTRIBUTING.md` in the registry repo, linked from the PR template.
-
-### Registry repo layout
-
-```
-scribbly-libraries/
-├── README.md
-├── CONTRIBUTING.md             # the rules above, plus PR walkthrough
-├── LICENSE
-├── package.json
-├── schemas/
-│   ├── scribblylib.schema.json # JSON Schema for .scribblylib v1
-│   └── meta.schema.json        # JSON Schema for meta.yaml
-├── scripts/
-│   ├── validate.ts             # runs in CI on each PR
-│   ├── build-manifest.ts       # regenerates libraries.json + previews on merge
-│   └── render-preview.ts       # headless canvas → preview.png (uses shared renderer pkg)
-├── submissions/
-│   └── <github-handle>/
-│       └── <library-slug>/
-│           ├── library.scribblylib
-│           ├── meta.yaml
-│           └── preview.png     # generated on merge; do not commit by hand
-├── libraries.json              # generated; the only file the app reads
-└── .github/
-    ├── workflows/
-    │   ├── validate.yml        # on PR → validate
-    │   └── publish.yml         # on push to main → build manifest + deploy Pages
-    └── PULL_REQUEST_TEMPLATE.md
-```
-
-### Manifest format — `libraries.json` v1
-
-```jsonc
-{
-  "type": "scribbly-libraries-manifest",
-  "version": 1,
-  "generatedAt": 1700000000000,
-  "libraries": [
-    {
-      "slug": "wissam/server-rack",
-      "name": "Server Rack",
-      "description": "Datacenter rack units, switches, cables. Good for infra diagrams.",
-      "author": { "handle": "wissam", "url": "https://github.com/wissam" },
-      "homepage": "https://example.com/server-rack",
-      "license": "CC-BY-4.0",
-      "tags": ["infrastructure", "diagrams"],
-      "itemCount": 12,
-      "version": "1.0.0",                                              // semver, bumped per merged update
-      "preview": "https://libraries.scribbly.app/p/wissam/server-rack.png",
-      "download": "https://libraries.scribbly.app/d/wissam/server-rack-1.0.0.scribblylib",
-      "sha256": "<hex>",                                               // integrity check at install time
-      "publishedAt": 1700000000000,
-      "updatedAt": 1700000000000
-    }
-  ]
-}
-```
-
-- **Versioning** — bumping `meta.yaml.version` is the only way to publish an update to an existing slug. Old versions stay reachable at their pinned URL so deep links don't break.
-- **Integrity** — the in-app importer computes SHA-256 after download and refuses to install on mismatch. Mitigates a compromised CDN serving tampered bytes.
-
-### In-app: gallery UI
-
-A new tab inside the existing `LibrarySidebar`:
-
-- **My libraries** (current) | **Browse**
-- Browse tab fetches `https://libraries.scribbly.app/libraries.json` once per session (HTTP cache headers handle revalidation).
-- Search by name / tag, filter by license.
-- Each card: preview thumbnail, name, author handle (link to GitHub), item count, license badge, **Install** button, overflow menu with **Report** (pre-filled GitHub issue link) and **View source** (link to the registry path).
-- **Install** = `PromptDialog` ("Add to your libraries as…") → fetch `.scribblylib` → verify SHA-256 → reuse the existing `importLibraryFromFile` path → land in the user's personal libraries under the chosen `ownerKey`.
-- A small banner on installed cards: "Installed — v1.0.0. Update available" when manifest version > installed version.
-
-### Deep-link install
-
-`https://scribbly.app/?addLibrary=<download-url>` opens Scribbly, fetches the file, shows the install confirm dialog with the metadata pre-filled. Only URLs whose host is in an allowlist (`libraries.scribbly.app` initially) auto-confirm; anything else shows a "third-party library — proceed?" warning explaining that the file has not been reviewed by Scribbly maintainers.
-
-This is what makes "share a library" feel like a single link instead of "download file, open Scribbly, import."
-
-### File structure additions in the app
+### App structure
 
 ```
 src/
-├── libraries/
-│   ├── marketplace/
-│   │   ├── manifest.ts         # fetch + cache libraries.json
-│   │   ├── installFromUrl.ts   # fetch .scribblylib + SHA-256 verify + import
-│   │   └── types.ts            # ManifestEntry, ManifestV1
-│   └── … (existing personal-library files)
-└── ui/
-    ├── LibrarySidebar.tsx      # add tab switcher
-    ├── BrowseTab.tsx           # gallery grid
-    ├── LibraryCard.tsx         # single entry card
-    └── InstallLibraryDialog.tsx # confirm + name + install
+├── auth/                 # useSession, isAdmin, SignInDialog, AccountControl
+├── libraries/gallery/    # types, slug, useGallery, useMyPublications,
+│   │                     # useReviewQueue (+ useReports), publish, install,
+│   │                     # moderation, report, deepLink (?library=<slug>)
+│   └── migrateToAccount.ts
+└── ui/                   # BrowseTab (DB-backed), LibraryCard, ReportDialog,
+                          # PublishLibraryDialog, MySubmissions, ReviewQueue,
+                          # GalleryDeepLink
 ```
 
-No new env vars. The manifest URL is a build-time constant: `VITE_LIBRARY_REGISTRY_URL`, defaulting to `https://libraries.scribbly.app/libraries.json`.
+### Deep link
 
-### Out of scope for this slice
+`?library=<slug>` opens the Browse tab with the install dialog pre-filled. Replaces the old `?addLibrary=<cdn-url>` + trusted-host allowlist.
 
-- Ratings, comments, download counts. (Adding them needs auth or invites spam-bots back in.)
-- In-app upload / "Publish to gallery" button. The PR-based flow is intentionally manual — friction is the feature, not a bug.
-- Author profile pages or following.
-- Paid libraries.
-- Localized non-English libraries. (Possible later via a per-language manifest, but not v1.)
-- Library updates auto-applied without user consent.
+### Env
 
-### Implementation order (post-MVP step 24+)
+- `VITE_ADMIN_EMAILS` — comma-separated admin allowlist (UI only; the perms file is authoritative).
+- Removed: `VITE_LIBRARY_REGISTRY_URL`, `VITE_LIBRARY_TRUSTED_HOSTS`, `VITE_LIBRARY_REGISTRY_REPO`.
 
-**Registry repo (separate from this app):**
+### Out of scope (still)
 
-24. Bootstrap `scribbly-libraries` repo: README, CONTRIBUTING (the guidelines above), LICENSE, PR template.
-25. Write `scribblylib.schema.json` + `meta.schema.json` and unit-test against fixtures.
-26. Write `validate.ts` covering all automated rules in the table above; wire to `validate.yml` on PR.
-27. Write `render-preview.ts` (shared renderer extracted to an `@scribbly/renderer` package or imported from this repo as a submodule) + `build-manifest.ts`; wire to `publish.yml` on push to main; configure GitHub Pages.
-28. Seed the registry with 3–5 first-party libraries so the gallery is non-empty at launch.
-
-**Scribbly app:**
-
-29. `src/libraries/marketplace/manifest.ts` — fetch + 1h memory cache + session storage fallback for offline.
-30. `BrowseTab.tsx` + `LibraryCard.tsx` — grid, search, tag filter, license badges.
-31. `installFromUrl.ts` — fetch, SHA-256 verify, hand off to existing `importLibraryFromFile`.
-32. `InstallLibraryDialog.tsx` — name confirmation, target `ownerKey` selection.
-33. Deep-link handler in `App.tsx` for `?addLibrary=` with allowlist + third-party warning.
-34. "Update available" banner driven by manifest `version` vs installed `version` (store `sourceSlug` + `sourceVersion` on imported libraries to enable this).
-35. Report button → pre-filled GitHub issue URL builder.
+- Ratings / comments / download counts.
+- Updating a published library's *items* in place (unpublish + resubmit instead).
+- Public author profiles, paid libraries, non-English localization.

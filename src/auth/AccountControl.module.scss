@@ -1,0 +1,52 @@
+.signIn {
+  appearance: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 7px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    background: var(--surface-2);
+    border-color: var(--border-hover);
+  }
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.email {
+  font-size: 12px;
+  color: var(--text-2);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signOut {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+}

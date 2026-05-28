@@ -8,6 +8,7 @@ import { createLaserTool } from "./LaserTool";
 import { createLineTool } from "./LineTool";
 import { createRectangleTool } from "./RectangleTool";
 import { createSelectionTool } from "./SelectionTool";
+import { createShape3DTool } from "./Shape3DTool";
 import { createTextTool } from "./TextTool";
 import type { DrawingTool, ToolName } from "./types";
 
@@ -26,6 +27,7 @@ export function createToolRegistry(): ToolRegistry {
     eraser: createEraserTool(),
     laser: createLaserTool(),
     frame: createFrameTool(),
+    shape3d: createShape3DTool(),
   };
 }
 

@@ -24,6 +24,7 @@ import type { BBox } from "../canvas/hitTest";
 import { recomputeArrowPoints } from "../canvas/bindings";
 import { dbSoftDeleteElements, dbWriteElements } from "../db/mutations";
 import type { ElementPatcher, TextDraft, ToolName } from "../tools/types";
+import type { Shape3DVariant } from "../tools/shape3d/primitives";
 import {
   canvasBackgroundForTheme,
   DARK_CANVAS_BG,
@@ -184,6 +185,9 @@ type AppState = {
   activeTool: ToolName;
   setActiveTool: (tool: ToolName) => void;
 
+  shape3DVariant: Shape3DVariant;
+  setShape3DVariant: (v: Shape3DVariant) => void;
+
   elements: ScribblyElement[];
   setElements: (elements: ScribblyElement[]) => void;
   addElement: (el: ScribblyElement) => void;
@@ -224,6 +228,27 @@ type AppState = {
 
   connectionTargetId: string | null;
   setConnectionTargetId: (id: string | null) => void;
+
+  // World-space position of the existing line-endpoint a new line is
+  // currently snapping to (rendered as a small ring). Null when no snap.
+  lineSnapTarget: { x: number; y: number } | null;
+  setLineSnapTarget: (p: { x: number; y: number } | null) => void;
+
+  // Preview of the polygon that would close if the in-flight line is
+  // released at the current snap target. `vertices` are the polygon's
+  // ordered corners in world coords; `edgeIds` are the existing line ids
+  // (open + shared closed-polygon perimeters) that form the chain. Null
+  // when no closing cycle is reachable.
+  polygonPreview: {
+    vertices: readonly [number, number][];
+    edgeIds: readonly string[];
+  } | null;
+  setPolygonPreview: (
+    p: {
+      vertices: readonly [number, number][];
+      edgeIds: readonly string[];
+    } | null,
+  ) => void;
 
   highlightedFrameId: string | null;
   setHighlightedFrameId: (id: string | null) => void;
@@ -266,13 +291,12 @@ type AppState = {
   librarySidebarOpen: boolean;
   setLibrarySidebarOpen: (open: boolean) => void;
 
-  // Deep-link install: App.tsx sets this when ?addLibrary=<url> matches an
-  // allowlisted manifest entry. LibrarySidebar picks it up, switches to
-  // the Browse tab, and forwards it to BrowseTab so the install dialog
-  // opens pre-filled. `unknown` so this file stays free of UI-type deps.
-  pendingMarketplaceEntry: unknown | null;
-  setPendingMarketplaceEntry: (entry: unknown | null) => void;
-  clearPendingMarketplaceEntry: () => void;
+  // Deep-link install: GalleryDeepLink sets this from ?library=<slug>.
+  // LibrarySidebar picks it up, switches to the Browse tab, and forwards
+  // the slug to BrowseTab so the install dialog opens for that entry.
+  pendingGallerySlug: string | null;
+  setPendingGallerySlug: (slug: string | null) => void;
+  clearPendingGallerySlug: () => void;
 
   // End-to-end encryption: `roomKey` is the AES-GCM key derived from the
   // URL hash. `roomEncrypted` reflects the room's `encrypted` flag — when
@@ -429,6 +453,9 @@ export const useAppState = create<AppState>()(
 
   activeTool: "selection",
   setActiveTool: (tool) => set({ activeTool: tool }),
+
+  shape3DVariant: "cube",
+  setShape3DVariant: (v) => set({ shape3DVariant: v }),
 
   elements: [],
   setElements: (next) =>
@@ -762,6 +789,48 @@ export const useAppState = create<AppState>()(
       state.connectionTargetId === id ? {} : { connectionTargetId: id },
     ),
 
+  lineSnapTarget: null,
+  setLineSnapTarget: (p) =>
+    set((state) => {
+      const cur = state.lineSnapTarget;
+      if (cur === p) return {};
+      if (cur && p && cur.x === p.x && cur.y === p.y) return {};
+      return { lineSnapTarget: p };
+    }),
+
+  polygonPreview: null,
+  setPolygonPreview: (p) =>
+    set((state) => {
+      const cur = state.polygonPreview;
+      if (cur === p) return {};
+      if (cur === null && p === null) return {};
+      // Identity check: edge id sets are usually the same object reference
+      // when nothing changed, but vertices may shift as the cursor moves
+      // within a single snap target. Compare cheaply: edge-id list contents.
+      if (cur && p && cur.edgeIds.length === p.edgeIds.length) {
+        let same = true;
+        for (let i = 0; i < cur.edgeIds.length; i++) {
+          if (cur.edgeIds[i] !== p.edgeIds[i]) {
+            same = false;
+            break;
+          }
+        }
+        if (same && cur.vertices.length === p.vertices.length) {
+          let vSame = true;
+          for (let i = 0; i < cur.vertices.length; i++) {
+            const a = cur.vertices[i]!;
+            const b = p.vertices[i]!;
+            if (a[0] !== b[0] || a[1] !== b[1]) {
+              vSame = false;
+              break;
+            }
+          }
+          if (vSame) return {};
+        }
+      }
+      return { polygonPreview: p };
+    }),
+
   highlightedFrameId: null,
   setHighlightedFrameId: (id) =>
     set((state) =>
@@ -908,10 +977,9 @@ export const useAppState = create<AppState>()(
   librarySidebarOpen: false,
   setLibrarySidebarOpen: (open) => set({ librarySidebarOpen: open }),
 
-  pendingMarketplaceEntry: null,
-  setPendingMarketplaceEntry: (entry) =>
-    set({ pendingMarketplaceEntry: entry }),
-  clearPendingMarketplaceEntry: () => set({ pendingMarketplaceEntry: null }),
+  pendingGallerySlug: null,
+  setPendingGallerySlug: (slug) => set({ pendingGallerySlug: slug }),
+  clearPendingGallerySlug: () => set({ pendingGallerySlug: null }),
 
   roomKey: null,
   roomEncrypted: false,
@@ -999,6 +1067,7 @@ export const useAppState = create<AppState>()(
         userName: state.userName,
         userColor: state.userColor,
         theme: state.theme,
+        shape3DVariant: state.shape3DVariant,
       }),
     },
   ),

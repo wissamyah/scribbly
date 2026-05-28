@@ -67,13 +67,16 @@ export function parseLibraryFile(text: string): LibraryFile {
 
 export type ImportLibraryInput = {
   ownerKey: string;
+  // Auth uid when a signed-in user imports/installs; the new library is
+  // tagged with it so it follows the account.
+  userId?: string;
   // If supplied, items are appended to this existing library; otherwise a
   // new library is created using `defaultName`.
   targetLibraryId?: string;
   defaultName: string;
-  // Marketplace provenance — set when installing from a registry entry.
-  // Stored on the new library so the gallery can later surface an "Update
-  // available" banner by comparing sourceVersion with the manifest entry.
+  // Gallery provenance — set when installing from a gallery entry. Stored
+  // on the new library so the Browse tab can surface an "Update available"
+  // banner by comparing sourceVersion with the gallery entry.
   sourceSlug?: string;
   sourceVersion?: string;
 };
@@ -88,6 +91,7 @@ export function importLibraryFromFile(
       ownerKey: input.ownerKey,
       name: input.defaultName,
       source: file.source,
+      ...(input.userId ? { userId: input.userId } : {}),
       ...(input.sourceSlug ? { sourceSlug: input.sourceSlug } : {}),
       ...(input.sourceVersion ? { sourceVersion: input.sourceVersion } : {}),
     });

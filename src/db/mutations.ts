@@ -41,6 +41,7 @@ type ElementRow = {
   startArrowhead: string;
   endArrowhead: string;
   containerId: string;
+  closed: boolean;
   ciphertext: string;
   iv: string;
 };
@@ -78,6 +79,7 @@ const EMPTY_SEMANTIC_FIELDS = {
   startArrowhead: "",
   endArrowhead: "",
   containerId: "",
+  closed: false,
 } as const;
 
 function plainElementToRow(el: ScribblyElement): ElementRow {
@@ -126,6 +128,7 @@ function plainElementToRow(el: ScribblyElement): ElementRow {
     startArrowhead: isArrow ? el.startArrowhead : "none",
     endArrowhead: isArrow ? el.endArrowhead : "none",
     containerId: isText ? (el.containerId ?? "") : "",
+    closed: el.type === "line" ? (el.closed ?? false) : false,
     ciphertext: "",
     iv: "",
   };

@@ -163,7 +163,7 @@ export function createEllipse(
 }
 
 export function createLine(
-  input: BaseFactoryInput & { points: ElementPoint[] },
+  input: BaseFactoryInput & { points: ElementPoint[]; closed?: boolean },
 ): LineElement {
   const bounds = pointsBounds(input.points);
   return {
@@ -171,6 +171,7 @@ export function createLine(
     ...baseFields(input),
     ...bounds,
     points: input.points,
+    closed: input.closed ?? false,
   };
 }
 

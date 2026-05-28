@@ -186,12 +186,14 @@ export function Canvas({ roomId, publishCursor }: Props) {
       setDraft: (el) => useAppState.getState().setDraft(el),
       getDraft: () => useAppState.getState().draftElement,
       addElement: (el) => useAppState.getState().addElement(el),
+      addElements: (els) => useAppState.getState().addElements(els),
       setActiveTool: (tool) => useAppState.getState().setActiveTool(tool),
       setTextDraft: (draft) => useAppState.getState().setTextDraft(draft),
       getView: () => useAppState.getState().view,
       getElements: () => useAppState.getState().elements,
       updateElements: (ids, patcher) =>
         useAppState.getState().updateElements(ids, patcher),
+      deleteElements: (ids) => useAppState.getState().deleteElements(ids),
       getSelectedIds: () => useAppState.getState().selectedIds,
       setSelectedIds: (ids) => useAppState.getState().setSelectedIds(ids),
       setSelectionBox: (box) => useAppState.getState().setSelectionBox(box),
@@ -227,6 +229,11 @@ export function Canvas({ roomId, publishCursor }: Props) {
     let eraserTrail: readonly import("../store/appState").EraserTrailPoint[] =
       [];
     let laserTrail: readonly import("../store/appState").LaserTrailPoint[] = [];
+    let lineSnapTarget: { x: number; y: number } | null = null;
+    let polygonPreview: {
+      vertices: readonly [number, number][];
+      edgeIds: readonly string[];
+    } | null = null;
 
     const syncScene = () => {
       const s = useAppState.getState();
@@ -247,6 +254,8 @@ export function Canvas({ roomId, publishCursor }: Props) {
       snapGuides = s.snapGuides;
       eraserTrail = s.eraserTrail;
       laserTrail = s.laserTrail;
+      lineSnapTarget = s.lineSnapTarget;
+      polygonPreview = s.polygonPreview;
       dirty = true;
     };
     syncScene();
@@ -281,6 +290,8 @@ export function Canvas({ roomId, publishCursor }: Props) {
             theme: s.theme,
             highlightedFrameId,
             editingFrameNameId,
+            lineSnapTarget,
+            polygonPreview,
           },
         );
         dirty = false;

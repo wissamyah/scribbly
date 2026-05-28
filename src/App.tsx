@@ -10,7 +10,7 @@ import { EditorMenu } from "./ui/EditorMenu";
 import { LibrarySidebar } from "./ui/LibrarySidebar";
 import { LiveCollabDialog } from "./ui/LiveCollabDialog";
 import { LoadingRoomScreen } from "./ui/LoadingRoomScreen";
-import { MarketplaceDeepLink } from "./ui/MarketplaceDeepLink";
+import { GalleryDeepLink } from "./ui/GalleryDeepLink";
 import { PeersCursors } from "./ui/PeersCursors";
 import { PropertiesPanel } from "./ui/PropertiesPanel";
 import { SessionEndedScreen } from "./ui/SessionEndedScreen";
@@ -108,7 +108,7 @@ function AppInner({
       <BottomLeftControls />
       <TextEditor roomId={roomId} />
       <FrameNameEditor />
-      <MarketplaceDeepLink />
+      <GalleryDeepLink />
       <LiveCollabDialog
         peers={handle.peers}
         isOwner={isOwner}

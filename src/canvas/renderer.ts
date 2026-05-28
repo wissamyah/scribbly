@@ -77,6 +77,17 @@ export type RenderOptions = {
   // Frame currently being renamed via the inline editor — skip drawing its
   // baked-in name label so the input doesn't stack on top of it.
   editingFrameNameId?: string | null;
+  // World position currently being snapped to by the in-flight line draft.
+  // Drawn as a small ring so the user sees where the new line will join.
+  lineSnapTarget?: { x: number; y: number } | null;
+  // Polygon that would close if the user released the in-flight line at the
+  // current snap target. `vertices` are world-space corners; `edgeIds` are
+  // the existing lines whose segments form the closing chain — they're
+  // illuminated so the user can plan the shape before committing.
+  polygonPreview?: {
+    vertices: readonly [number, number][];
+    edgeIds: readonly string[];
+  } | null;
   // Selected theme — switches default stroke/font colors and the grid color
   // without mutating stored element values. Defaults to "light" for callers
   // (like PNG/SVG export) that haven't opted in.
@@ -236,7 +247,94 @@ export function renderScene(
     screenTransform();
     drawLaserTrail(ctx, view, laser);
   }
+
+  if (options.polygonPreview) {
+    screenTransform();
+    drawPolygonPreview(
+      ctx,
+      view,
+      options.polygonPreview.vertices,
+      options.polygonPreview.edgeIds,
+      elementsById,
+    );
+  }
+
+  if (options.lineSnapTarget) {
+    screenTransform();
+    drawLineSnapTarget(ctx, view, options.lineSnapTarget);
+  }
   worldTransform();
+}
+
+const LINE_SNAP_RING_RADIUS = 7;
+const LINE_SNAP_RING_COLOR = "#22c55e";
+
+function drawLineSnapTarget(
+  ctx: CanvasRenderingContext2D,
+  view: ViewTransform,
+  world: { x: number; y: number },
+): void {
+  const p = worldToScreen(view, world.x, world.y);
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = LINE_SNAP_RING_COLOR;
+  ctx.fillStyle = "rgba(34, 197, 94, 0.2)";
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, LINE_SNAP_RING_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Illuminates the in-flight closure feedback:
+//   - Full cycle reachable: faint green fill over the polygon that would
+//     close, plus a thick green outline tracing its perimeter.
+//   - No full cycle yet: stroke each individual open line connected to the
+//     start or snap node, so the user can see the chain they're building
+//     piece by piece before it forms a closed shape.
+// Drawn in screen space so the highlight stays visually constant regardless
+// of zoom.
+function drawPolygonPreview(
+  ctx: CanvasRenderingContext2D,
+  view: ViewTransform,
+  vertices: readonly [number, number][],
+  edgeIds: readonly string[],
+  elementsById: Map<string, ScribblyElement>,
+): void {
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = LINE_SNAP_RING_COLOR;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  if (vertices.length >= 3) {
+    const screenPts = vertices.map(([x, y]) => worldToScreen(view, x, y));
+    ctx.beginPath();
+    ctx.moveTo(screenPts[0]!.x, screenPts[0]!.y);
+    for (let i = 1; i < screenPts.length; i++) {
+      ctx.lineTo(screenPts[i]!.x, screenPts[i]!.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(34, 197, 94, 0.12)";
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    for (const edgeId of edgeIds) {
+      const el = elementsById.get(edgeId);
+      if (!el || el.isDeleted || el.type !== "line") continue;
+      if (el.points.length < 2) continue;
+      ctx.beginPath();
+      const first = worldToScreen(view, el.points[0]![0], el.points[0]![1]);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < el.points.length; i++) {
+        const p = worldToScreen(view, el.points[i]![0], el.points[i]![1]);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawLaserTrail(

@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { importImageFile } from "../canvas/imageImport";
 import { useAppState } from "../store/appState";
+import type { Shape3DVariant } from "../tools/shape3d/primitives";
 import type { ToolName } from "../tools/types";
 import { MoreToolsPopover, type OverflowTool } from "./MoreToolsPopover";
 import styles from "./Toolbar.module.scss";
@@ -104,6 +105,51 @@ const LaserIcon = (
     </g>
   </svg>
 );
+const CubeIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 8l8-4 8 4-8 4-8-4z" />
+    <path d="M4 8v8l8 4" />
+    <path d="M20 8v8l-8 4" />
+    <path d="M12 12v8" />
+  </svg>
+);
+const CylinderIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <ellipse cx="12" cy="6" rx="7" ry="2.5" />
+    <path d="M5 6v12" />
+    <path d="M19 6v12" />
+    <path d="M5 18a7 2.5 0 0 0 14 0" />
+  </svg>
+);
+const ConeIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3l7 16" />
+    <path d="M12 3l-7 16" />
+    <ellipse cx="12" cy="19" rx="7" ry="2.5" />
+  </svg>
+);
+const PyramidIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3l-9 16" />
+    <path d="M12 3l9 16" />
+    <path d="M3 19h18" />
+    <path d="M12 3l0 16" />
+  </svg>
+);
+
+type Shape3DDef = {
+  variant: Shape3DVariant;
+  label: string;
+  icon: ReactNode;
+};
+
+const SHAPE_3D_VARIANTS: Shape3DDef[] = [
+  { variant: "cube", label: "3D Cube", icon: CubeIcon },
+  { variant: "cylinder", label: "3D Cylinder", icon: CylinderIcon },
+  { variant: "cone", label: "3D Cone", icon: ConeIcon },
+  { variant: "pyramid", label: "3D Pyramid", icon: PyramidIcon },
+];
+
 const ImageIcon = (
   <svg viewBox="0 0 20 20" aria-hidden="true">
     <path d="M12.5 6.667h.01" />
@@ -146,6 +192,8 @@ type ToolbarProps = { roomId: string };
 export function Toolbar({ roomId }: ToolbarProps) {
   const activeTool = useAppState((s) => s.activeTool);
   const setActiveTool = useAppState((s) => s.setActiveTool);
+  const shape3DVariant = useAppState((s) => s.shape3DVariant);
+  const setShape3DVariant = useAppState((s) => s.setShape3DVariant);
   const viewMode = useAppState((s) => s.viewMode);
   const elements = useAppState((s) => s.elements);
   const selectedIds = useAppState((s) => s.selectedIds);
@@ -187,19 +235,33 @@ export function Toolbar({ roomId }: ToolbarProps) {
     }
   };
 
-  const overflowTools: OverflowTool[] = OVERFLOW_TOOLS.map((tool) => ({
-    name: tool.name,
-    label: tool.label,
-    shortcut: tool.shortcut,
-    icon: tool.icon,
-    active: activeTool === tool.name,
-    disabled:
-      viewMode &&
-      tool.name !== "selection" &&
-      tool.name !== "hand" &&
-      tool.name !== "laser",
-    onSelect: () => setActiveTool(tool.name),
-  }));
+  const overflowTools: OverflowTool[] = [
+    ...OVERFLOW_TOOLS.map<OverflowTool>((tool) => ({
+      name: tool.name,
+      label: tool.label,
+      shortcut: tool.shortcut,
+      icon: tool.icon,
+      active: activeTool === tool.name,
+      disabled:
+        viewMode &&
+        tool.name !== "selection" &&
+        tool.name !== "hand" &&
+        tool.name !== "laser",
+      onSelect: () => setActiveTool(tool.name),
+    })),
+    ...SHAPE_3D_VARIANTS.map<OverflowTool>((v) => ({
+      name: `shape3d:${v.variant}`,
+      label: v.label,
+      shortcut: "",
+      icon: v.icon,
+      active: activeTool === "shape3d" && shape3DVariant === v.variant,
+      disabled: viewMode,
+      onSelect: () => {
+        setShape3DVariant(v.variant);
+        setActiveTool("shape3d");
+      },
+    })),
+  ];
 
   return (
     <div className={styles.toolbar}>
@@ -247,7 +309,9 @@ export function Toolbar({ roomId }: ToolbarProps) {
       </button>
       <MoreToolsPopover
         tools={overflowTools}
-        triggerActive={OVERFLOW_TOOL_NAMES.has(activeTool)}
+        triggerActive={
+          OVERFLOW_TOOL_NAMES.has(activeTool) || activeTool === "shape3d"
+        }
       />
       <input
         ref={fileInputRef}

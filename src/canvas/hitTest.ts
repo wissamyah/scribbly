@@ -185,6 +185,26 @@ function distToSegment(
   return Math.hypot(p.x - (a[0] + t * dx), p.y - (a[1] + t * dy));
 }
 
+function pointInPolygon(
+  p: Point,
+  poly: readonly (readonly [number, number])[],
+): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    const xi = a[0];
+    const yi = a[1];
+    const xj = b[0];
+    const yj = b[1];
+    const intersect =
+      yi > p.y !== yj > p.y &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 export function hitTestElement(
   world: Point,
   el: ScribblyElement,
@@ -214,6 +234,22 @@ export function hitTestElement(
         const b = el.points[i + 1];
         if (!a || !b) continue;
         if (distToSegment(p, a, b) <= threshold) return true;
+      }
+      if (el.type === "line" && el.closed && el.points.length >= 3) {
+        // Closing edge (last → first) is part of the stroke when closed.
+        const a = el.points[el.points.length - 1]!;
+        const b = el.points[0]!;
+        if (distToSegment(p, a, b) <= threshold) return true;
+        // Interior counts as a hit only when the polygon is actually filled.
+        // A `none` fillStyle leaves the inside transparent; clicking inside
+        // a transparent outline should fall through to whatever is behind it.
+        if (
+          el.fillStyle !== "none" &&
+          el.backgroundColor !== "transparent" &&
+          pointInPolygon(p, el.points)
+        ) {
+          return true;
+        }
       }
       return false;
     }

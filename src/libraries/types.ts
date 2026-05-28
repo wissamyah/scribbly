@@ -3,12 +3,14 @@ import type { ScribblyElement } from "../canvas/elements";
 export type ScribblyLibrary = {
   id: string;
   ownerKey: string;
+  // Auth uid when owned by a signed-in account (account-synced libraries).
+  userId?: string;
   name: string;
   isPublic: boolean;
   source: string;
   createdAt: number;
   updatedAt: number;
-  // Marketplace provenance — populated when installed from a registry.
+  // Gallery provenance — populated when installed from the in-app gallery.
   sourceSlug?: string;
   sourceVersion?: string;
 };

@@ -1,76 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import {
-  fetchManifest,
-  filterManifest,
-  ManifestFetchError,
-} from "../libraries/marketplace/manifest";
-import type {
-  ManifestEntry,
-  ManifestV1,
-} from "../libraries/marketplace/types";
-import {
-  InstallError,
-  installFromManifestEntry,
-} from "../libraries/marketplace/installFromUrl";
+import type { Session } from "../auth/useSession";
+import { filterGallery, useGallery } from "../libraries/gallery/useGallery";
+import { installFromGallery } from "../libraries/gallery/install";
+import { reportLibrary } from "../libraries/gallery/report";
+import type { GalleryLibrary } from "../libraries/gallery/types";
 import type { ScribblyLibrary } from "../libraries/types";
 import { LibraryCard, type InstallState } from "./LibraryCard";
 import { PromptDialog } from "./PromptDialog";
+import { ReportDialog } from "./ReportDialog";
 import styles from "./LibrarySidebar.module.scss";
 
 type Props = {
   ownerKey: string;
+  session: Session;
   installedLibraries: readonly ScribblyLibrary[];
   // Called with the new library's id after a successful install so the
   // sidebar can switch tabs back and highlight what was just added.
   onInstalled: (libraryId: string) => void;
-  // Opens the guided "Submit to gallery" flow. The sidebar owns the dialog
-  // state because the same flow is reachable from My libraries too.
+  // Opens the publish flow (parent gates sign-in).
   onSubmitClick: () => void;
-  initialEntry?: ManifestEntry | null;
-  onInitialEntryConsumed?: () => void;
+  // Opens the shared sign-in dialog with a reason (used when reporting
+  // while signed out).
+  requireSignIn: (reason: string) => void;
+  // Deep-link: open the install dialog for this slug once the gallery loads.
+  initialSlug?: string | null;
+  onInitialSlugConsumed?: () => void;
 };
-
-type FetchState =
-  | { kind: "loading" }
-  | { kind: "ready"; manifest: ManifestV1 }
-  | { kind: "error"; message: string };
 
 export function BrowseTab({
   ownerKey,
+  session,
   installedLibraries,
   onInstalled,
   onSubmitClick,
-  initialEntry,
-  onInitialEntryConsumed,
+  requireSignIn,
+  initialSlug,
+  onInitialSlugConsumed,
 }: Props) {
-  const [state, setState] = useState<FetchState>({ kind: "loading" });
+  const { libraries, isLoading, error } = useGallery();
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState<string>("");
   const [license, setLicense] = useState<string>("");
   const [installing, setInstalling] = useState<string | null>(null);
-  const [pendingInstall, setPendingInstall] = useState<ManifestEntry | null>(
+  const [pendingInstall, setPendingInstall] = useState<GalleryLibrary | null>(
+    null,
+  );
+  const [pendingReport, setPendingReport] = useState<GalleryLibrary | null>(
     null,
   );
   const [toast, setToast] = useState<string | null>(null);
-
-  const reload = useCallback(async (opts?: { force?: boolean }) => {
-    setState({ kind: "loading" });
-    try {
-      const manifest = await fetchManifest(undefined, opts);
-      setState({ kind: "ready", manifest });
-    } catch (e) {
-      setState({
-        kind: "error",
-        message:
-          e instanceof ManifestFetchError ? e.message : "Could not load gallery",
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   useEffect(() => {
     if (toast === null) return;
@@ -78,88 +57,100 @@ export function BrowseTab({
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Deep-link install: when the parent passed an entry, open the install
-  // dialog as soon as the manifest is loaded (so the user sees the entry
-  // we matched against, not just a slug from the URL).
+  // Deep-link install: when the parent passed a slug, open the install
+  // dialog for the matching entry once the gallery has loaded.
   useEffect(() => {
-    if (!initialEntry) return;
-    if (state.kind !== "ready") return;
-    setPendingInstall(initialEntry);
-    onInitialEntryConsumed?.();
-  }, [initialEntry, state, onInitialEntryConsumed]);
+    if (!initialSlug || isLoading) return;
+    const match = libraries.find((l) => l.slug === initialSlug);
+    if (match) setPendingInstall(match);
+    else setToast("That library link could not be found.");
+    onInitialSlugConsumed?.();
+  }, [initialSlug, isLoading, libraries, onInitialSlugConsumed]);
 
-  // sourceSlug → installed-version lookup, used to decorate each card.
+  // sourceSlug → highest installed (numeric) version, to decorate cards.
   const installedBySlug = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, number>();
     for (const lib of installedLibraries) {
       if (lib.sourceSlug && lib.sourceVersion) {
-        // Keep the highest installed version if a user has multiple copies.
+        const v = Number(lib.sourceVersion) || 0;
         const prior = map.get(lib.sourceSlug);
-        if (!prior || compareSemver(lib.sourceVersion, prior) > 0) {
-          map.set(lib.sourceSlug, lib.sourceVersion);
-        }
+        if (prior === undefined || v > prior) map.set(lib.sourceSlug, v);
       }
     }
     return map;
   }, [installedLibraries]);
 
   const allTags = useMemo(() => {
-    if (state.kind !== "ready") return [] as string[];
     const set = new Set<string>();
-    for (const l of state.manifest.libraries) for (const t of l.tags) set.add(t);
+    for (const l of libraries) for (const t of l.tags) set.add(t);
     return [...set].sort();
-  }, [state]);
+  }, [libraries]);
 
   const allLicenses = useMemo(() => {
-    if (state.kind !== "ready") return [] as string[];
     const set = new Set<string>();
-    for (const l of state.manifest.libraries) set.add(l.license);
+    for (const l of libraries) set.add(l.license);
     return [...set].sort();
-  }, [state]);
+  }, [libraries]);
 
-  const visible = useMemo(() => {
-    if (state.kind !== "ready") return [] as ManifestEntry[];
-    return filterManifest(state.manifest.libraries, {
-      search,
-      tag: tag || undefined,
-      license: license || undefined,
-    });
-  }, [state, search, tag, license]);
-
-  const stateFor = useCallback(
-    (entry: ManifestEntry): InstallState => {
-      const installed = installedBySlug.get(entry.slug);
-      if (!installed) return { kind: "not-installed" };
-      if (compareSemver(entry.version, installed) > 0) {
-        return {
-          kind: "update-available",
-          installed,
-          available: entry.version,
-        };
-      }
-      return { kind: "installed", version: installed };
-    },
-    [installedBySlug],
+  const visible = useMemo(
+    () =>
+      filterGallery(libraries, {
+        search,
+        tag: tag || undefined,
+        license: license || undefined,
+      }),
+    [libraries, search, tag, license],
   );
 
-  const runInstall = async (entry: ManifestEntry, displayName: string) => {
+  const stateFor = (entry: GalleryLibrary): InstallState => {
+    const installed = installedBySlug.get(entry.slug);
+    if (installed === undefined) return { kind: "not-installed" };
+    if (entry.version > installed) {
+      return { kind: "update-available", installed, available: entry.version };
+    }
+    return { kind: "installed", version: installed };
+  };
+
+  const runInstall = (entry: GalleryLibrary, displayName: string) => {
     setInstalling(entry.slug);
     try {
-      const libId = await installFromManifestEntry({
-        ownerKey,
+      const libId = installFromGallery({
         entry,
+        ownerKey,
+        userId: session.userId,
         displayName,
       });
       setToast(`Installed ${entry.name}`);
       onInstalled(libId);
     } catch (e) {
-      const msg =
-        e instanceof InstallError
-          ? `Install failed: ${e.message}`
-          : `Install failed: ${(e as Error).message}`;
-      setToast(msg);
+      setToast(`Install failed: ${(e as Error).message}`);
     } finally {
       setInstalling(null);
+    }
+  };
+
+  const handleReportClick = (entry: GalleryLibrary) => {
+    if (!session.userId) {
+      requireSignIn("Sign in to report a library.");
+      return;
+    }
+    setPendingReport(entry);
+  };
+
+  const submitReport = (reason: string, detail: string) => {
+    const target = pendingReport;
+    setPendingReport(null);
+    if (!target || !session.userId) return;
+    try {
+      reportLibrary({
+        userId: session.userId,
+        librarySlug: target.slug,
+        reason,
+        detail,
+      });
+      setToast("Report submitted — thank you");
+    } catch (e) {
+      setToast(`Could not submit report: ${(e as Error).message}`);
     }
   };
 
@@ -213,37 +204,18 @@ export function BrowseTab({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          onClick={() => void reload({ force: true })}
-          title="Refresh gallery"
-          aria-label="Refresh gallery"
-        >
-          ↻
-        </button>
       </div>
 
-      {state.kind === "loading" && (
-        <div className={styles.browseStatus}>Loading gallery…</div>
-      )}
-      {state.kind === "error" && (
+      {isLoading && <div className={styles.browseStatus}>Loading gallery…</div>}
+      {error && <div className={styles.browseStatus}>{error}</div>}
+      {!isLoading && !error && visible.length === 0 && (
         <div className={styles.browseStatus}>
-          {state.message}
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => void reload({ force: true })}
-            style={{ marginTop: 12 }}
-          >
-            Retry
-          </button>
+          {libraries.length === 0
+            ? "No libraries published yet. Be the first to submit one!"
+            : "No libraries match your filter."}
         </div>
       )}
-      {state.kind === "ready" && visible.length === 0 && (
-        <div className={styles.browseStatus}>No libraries match your filter.</div>
-      )}
-      {state.kind === "ready" && visible.length > 0 && (
+      {!isLoading && !error && visible.length > 0 && (
         <div className={styles.browseList}>
           {visible.map((entry) => (
             <LibraryCard
@@ -254,6 +226,7 @@ export function BrowseTab({
                 if (installing) return;
                 setPendingInstall(entry);
               }}
+              onReport={() => handleReportClick(entry)}
             />
           ))}
         </div>
@@ -264,7 +237,9 @@ export function BrowseTab({
         title={pendingInstall ? `Install ${pendingInstall.name}` : ""}
         message={
           pendingInstall
-            ? `${pendingInstall.slug} · v${pendingInstall.version} · ${pendingInstall.license}\nFrom: ${pendingInstall.author.handle}`
+            ? `${pendingInstall.itemCount} item${
+                pendingInstall.itemCount === 1 ? "" : "s"
+              } · v${pendingInstall.version} · ${pendingInstall.license}\nBy ${pendingInstall.authorHandle}`
             : undefined
         }
         label="Library name"
@@ -274,23 +249,18 @@ export function BrowseTab({
         onConfirm={(value) => {
           const target = pendingInstall;
           setPendingInstall(null);
-          if (target) void runInstall(target, value);
+          if (target) runInstall(target, value);
         }}
+      />
+
+      <ReportDialog
+        open={pendingReport !== null}
+        libraryName={pendingReport?.name ?? ""}
+        onCancel={() => setPendingReport(null)}
+        onSubmit={submitReport}
       />
 
       {toast && <div className={styles.toast}>{toast}</div>}
     </div>
   );
-}
-
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map((s) => Number(s) || 0);
-  const pb = b.split(".").map((s) => Number(s) || 0);
-  for (let i = 0; i < 3; i++) {
-    const da = pa[i] ?? 0;
-    const db = pb[i] ?? 0;
-    if (da > db) return 1;
-    if (da < db) return -1;
-  }
-  return 0;
 }

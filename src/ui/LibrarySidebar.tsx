@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScribblyElement } from "../canvas/elements";
+import { AccountControl } from "../auth/AccountControl";
+import { isAdminEmail } from "../auth/isAdmin";
+import { SignInDialog } from "../auth/SignInDialog";
+import { useSession } from "../auth/useSession";
 import { dbWriteElements } from "../db/mutations";
 import { downloadLibraryFile } from "../libraries/exportLibrary";
+import type { GalleryLibrary } from "../libraries/gallery/types";
 import {
   buildInsertElements,
   type InsertItemInput,
@@ -11,7 +16,12 @@ import {
   LibraryImportError,
   readLibraryFile,
 } from "../libraries/importLibrary";
-import type { ManifestEntry } from "../libraries/marketplace/types";
+import {
+  dismissMigration,
+  migrateLibrariesToAccount,
+  useMigrationCandidates,
+  wasMigrationDismissed,
+} from "../libraries/migrateToAccount";
 import {
   createLibrary,
   deleteLibrary,
@@ -27,8 +37,10 @@ import type { LibraryItem } from "../libraries/types";
 import { useAppState } from "../store/appState";
 import { BrowseTab } from "./BrowseTab";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MySubmissions } from "./MySubmissions";
 import { PromptDialog } from "./PromptDialog";
-import { SubmitLibraryDialog } from "./SubmitLibraryDialog";
+import { PublishLibraryDialog } from "./PublishLibraryDialog";
+import { ReviewQueue } from "./ReviewQueue";
 import styles from "./LibrarySidebar.module.scss";
 
 function BookIcon() {
@@ -124,7 +136,8 @@ export function LibrarySidebar({ roomId }: Props) {
   const open = useAppState((s) => s.librarySidebarOpen);
   const setOpen = useAppState((s) => s.setLibrarySidebarOpen);
   const ownerKey = useOwnerKey();
-  const { libraries } = useLibraries(ownerKey);
+  const session = useSession();
+  const { libraries } = useLibraries(ownerKey, session.userId);
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -168,6 +181,7 @@ export function LibrarySidebar({ roomId }: Props) {
       <SidebarBody
         roomId={roomId}
         ownerKey={ownerKey}
+        session={session}
         libraries={libraries}
         activeLibraryId={activeLibraryId}
         setActiveLibraryId={setActiveLibraryId}
@@ -180,37 +194,39 @@ export function LibrarySidebar({ roomId }: Props) {
 type SidebarBodyProps = {
   roomId: string;
   ownerKey: string;
+  session: ReturnType<typeof useSession>;
   libraries: ReturnType<typeof useLibraries>["libraries"];
   activeLibraryId: string | null;
   setActiveLibraryId: (id: string | null) => void;
   onClose: () => void;
 };
 
-type SidebarTab = "my" | "browse";
+type SidebarTab = "my" | "browse" | "submissions" | "review";
+
+type PublishState =
+  | { mode: "new" }
+  | { mode: "edit"; entry: GalleryLibrary }
+  | null;
 
 function SidebarBody({
   roomId,
   ownerKey,
+  session,
   libraries,
   activeLibraryId,
   setActiveLibraryId,
   onClose,
 }: SidebarBodyProps) {
-  // Tab state is local — the parent (LibrarySidebar) doesn't care which
-  // tab is showing. Deep-link installs nudge `tab` to "browse" via the
-  // Zustand `pendingMarketplaceEntry` field (read below).
-  const pendingMarketplaceEntry = useAppState(
-    (s) => s.pendingMarketplaceEntry,
-  );
-  const clearPendingMarketplaceEntry = useAppState(
-    (s) => s.clearPendingMarketplaceEntry,
-  );
+  const pendingGallerySlug = useAppState((s) => s.pendingGallerySlug);
+  const clearPendingGallerySlug = useAppState((s) => s.clearPendingGallerySlug);
   const [tab, setTab] = useState<SidebarTab>(
-    pendingMarketplaceEntry ? "browse" : "my",
+    pendingGallerySlug ? "browse" : "my",
   );
   useEffect(() => {
-    if (pendingMarketplaceEntry) setTab("browse");
-  }, [pendingMarketplaceEntry]);
+    if (pendingGallerySlug) setTab("browse");
+  }, [pendingGallerySlug]);
+
+  const isAdmin = isAdminEmail(session.email);
   const { items } = useLibraryItems(activeLibraryId);
   const selectedIds = useAppState((s) => s.selectedIds);
   const elements = useAppState((s) => s.elements);
@@ -253,16 +269,32 @@ function SidebarBody({
     tone?: "default" | "danger";
     onConfirm: () => void;
   } | null>(null);
-  const [submitOpen, setSubmitOpen] = useState(false);
+  const [publishState, setPublishState] = useState<PublishState>(null);
+  const [signInReason, setSignInReason] = useState<string | null>(null);
+  const requireSignIn = (reason: string) => setSignInReason(reason);
+
+  // First-sign-in migration: offer to move libraries created under the local
+  // ownerKey into the signed-in account.
+  const migrationCandidates = useMigrationCandidates(ownerKey, session.userId);
+  const [migrationOpen, setMigrationOpen] = useState(false);
+  useEffect(() => {
+    if (!session.userId) return;
+    if (migrationCandidates.length === 0) return;
+    if (wasMigrationDismissed(session.userId)) return;
+    setMigrationOpen(true);
+  }, [session.userId, migrationCandidates.length]);
 
   const handleOpenSubmit = () => {
-    if (!activeLibrary) {
-      // Browse-tab entry: nudge user back to My libraries so they can pick one.
-      setTab("my");
-      setToast("Pick or create a library, then click Submit to gallery");
+    if (!session.userId) {
+      requireSignIn("Sign in to submit a library to the gallery.");
       return;
     }
-    setSubmitOpen(true);
+    if (!activeLibrary || items.length === 0) {
+      setTab("my");
+      setToast("Pick a library with at least one item, then Submit");
+      return;
+    }
+    setPublishState({ mode: "new" });
   };
 
   useEffect(() => setKeyDraft(ownerKey), [ownerKey]);
@@ -274,7 +306,11 @@ function SidebarBody({
   }, [toast]);
 
   const handleNewLibrary = () => {
-    const id = createLibrary({ ownerKey, name: NEW_LIBRARY_LABEL });
+    const id = createLibrary({
+      ownerKey,
+      name: NEW_LIBRARY_LABEL,
+      ...(session.userId ? { userId: session.userId } : {}),
+    });
     setActiveLibraryId(id);
   };
 
@@ -310,7 +346,11 @@ function SidebarBody({
     if (selectedElements.length === 0) return;
     let libraryId = activeLibraryId;
     if (!libraryId) {
-      libraryId = createLibrary({ ownerKey, name: NEW_LIBRARY_LABEL });
+      libraryId = createLibrary({
+        ownerKey,
+        name: NEW_LIBRARY_LABEL,
+        ...(session.userId ? { userId: session.userId } : {}),
+      });
       setActiveLibraryId(libraryId);
     }
     const targetLibraryId = libraryId;
@@ -358,6 +398,7 @@ function SidebarBody({
         const parsed = await readLibraryFile(f);
         const id = importLibraryFromFile(parsed, {
           ownerKey,
+          ...(session.userId ? { userId: session.userId } : {}),
           defaultName: f.name.replace(/\.scribblylib$/i, "") || NEW_LIBRARY_LABEL,
         });
         setActiveLibraryId(id);
@@ -386,7 +427,6 @@ function SidebarBody({
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    // Only clear when leaving the panel entirely.
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setDragOver(false);
   };
@@ -439,6 +479,13 @@ function SidebarBody({
         </button>
       </div>
 
+      <div className={styles.headerRow}>
+        <AccountControl
+          session={session}
+          onSignIn={() => requireSignIn("Sign in to publish and manage libraries.")}
+        />
+      </div>
+
       <div className={styles.tabBar} role="tablist">
         <button
           type="button"
@@ -458,224 +505,267 @@ function SidebarBody({
         >
           Browse
         </button>
+        {session.userId && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "submissions"}
+            className={`${styles.tab} ${tab === "submissions" ? styles.tabActive : ""}`}
+            onClick={() => setTab("submissions")}
+          >
+            Submissions
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "review"}
+            className={`${styles.tab} ${tab === "review" ? styles.tabActive : ""}`}
+            onClick={() => setTab("review")}
+          >
+            Review
+          </button>
+        )}
       </div>
 
       {tab === "browse" ? (
         <BrowseTab
           ownerKey={ownerKey}
+          session={session}
           installedLibraries={libraries}
           onInstalled={(id) => {
             setTab("my");
             setActiveLibraryId(id);
           }}
           onSubmitClick={handleOpenSubmit}
-          initialEntry={pendingMarketplaceEntry as ManifestEntry | null}
-          onInitialEntryConsumed={clearPendingMarketplaceEntry}
+          requireSignIn={requireSignIn}
+          initialSlug={pendingGallerySlug}
+          onInitialSlugConsumed={clearPendingGallerySlug}
         />
+      ) : tab === "submissions" ? (
+        <MySubmissions
+          session={session}
+          onEdit={(entry) => setPublishState({ mode: "edit", entry })}
+        />
+      ) : tab === "review" ? (
+        <ReviewQueue enabled={isAdmin} />
       ) : (
-      <>
-      <div className={styles.row}>
-        <select
-          className={styles.select}
-          value={activeLibraryId ?? ""}
-          onChange={(e) => setActiveLibraryId(e.target.value || null)}
-          disabled={libraries.length === 0}
-        >
-          {libraries.length === 0 && <option value="">No libraries yet</option>}
-          {libraries.map((lib) => (
-            <option key={lib.id} value={lib.id}>
-              {lib.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          onClick={handleNewLibrary}
-          title="New library"
-          aria-label="New library"
-        >
-          <PlusIcon />
-        </button>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          onClick={handleRenameLibrary}
-          title="Rename library"
-          aria-label="Rename library"
-          disabled={!activeLibrary}
-        >
-          <PencilIcon />
-        </button>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          onClick={handleDeleteLibrary}
-          title="Delete library"
-          aria-label="Delete library"
-          disabled={!activeLibrary}
-        >
-          <TrashIcon />
-        </button>
-      </div>
-
-      <div className={styles.section}>
-        <div className={styles.label}>Items</div>
-        {items.length === 0 ? (
-          <div className={styles.empty}>
-            {activeLibrary
-              ? "Select shapes on the canvas, then click “Save selection” below."
-              : "Create a library to start saving shapes."}
+        <>
+          <div className={styles.row}>
+            <select
+              className={styles.select}
+              value={activeLibraryId ?? ""}
+              onChange={(e) => setActiveLibraryId(e.target.value || null)}
+              disabled={libraries.length === 0}
+            >
+              {libraries.length === 0 && (
+                <option value="">No libraries yet</option>
+              )}
+              {libraries.map((lib) => (
+                <option key={lib.id} value={lib.id}>
+                  {lib.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={handleNewLibrary}
+              title="New library"
+              aria-label="New library"
+            >
+              <PlusIcon />
+            </button>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={handleRenameLibrary}
+              title="Rename library"
+              aria-label="Rename library"
+              disabled={!activeLibrary}
+            >
+              <PencilIcon />
+            </button>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={handleDeleteLibrary}
+              title="Delete library"
+              aria-label="Delete library"
+              disabled={!activeLibrary}
+            >
+              <TrashIcon />
+            </button>
           </div>
-        ) : (
-          <div className={styles.itemsGrid}>
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={styles.itemTile}
-                title={`${item.name} — click to insert`}
-                onClick={() => insertItem(item)}
-              >
-                {item.preview ? (
-                  <img src={item.preview} alt={item.name} draggable={false} />
-                ) : (
-                  <span>{item.name}</span>
-                )}
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  className={styles.itemRemove}
-                  title="Remove from library"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmConfig({
-                      title: "Remove item",
-                      message: `Remove "${item.name}" from this library?`,
-                      confirmLabel: "Remove",
-                      tone: "danger",
-                      onConfirm: () => deleteLibraryItem(item.id),
-                    });
-                  }}
-                >
-                  ×
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {selectedElements.length === 0 ? (
-        <div className={styles.savePreviewEmpty}>
-          Select shapes on the canvas to save them here
-        </div>
-      ) : (
-        <button
-          type="button"
-          className={styles.savePreview}
-          onClick={handleSaveSelection}
-          title="Add selection to library"
-          aria-label="Add selection to library"
-        >
-          {selectionPreview && (
-            <img src={selectionPreview} alt="" draggable={false} />
+          <div className={styles.section}>
+            <div className={styles.label}>Items</div>
+            {items.length === 0 ? (
+              <div className={styles.empty}>
+                {activeLibrary
+                  ? "Select shapes on the canvas, then click “Save selection” below."
+                  : "Create a library to start saving shapes."}
+              </div>
+            ) : (
+              <div className={styles.itemsGrid}>
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={styles.itemTile}
+                    title={`${item.name} — click to insert`}
+                    onClick={() => insertItem(item)}
+                  >
+                    {item.preview ? (
+                      <img
+                        src={item.preview}
+                        alt={item.name}
+                        draggable={false}
+                      />
+                    ) : (
+                      <span>{item.name}</span>
+                    )}
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      className={styles.itemRemove}
+                      title="Remove from library"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmConfig({
+                          title: "Remove item",
+                          message: `Remove "${item.name}" from this library?`,
+                          confirmLabel: "Remove",
+                          tone: "danger",
+                          onConfirm: () => deleteLibraryItem(item.id),
+                        });
+                      }}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selectedElements.length === 0 ? (
+            <div className={styles.savePreviewEmpty}>
+              Select shapes on the canvas to save them here
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.savePreview}
+              onClick={handleSaveSelection}
+              title="Add selection to library"
+              aria-label="Add selection to library"
+            >
+              {selectionPreview && (
+                <img src={selectionPreview} alt="" draggable={false} />
+              )}
+              <span className={styles.savePreviewPlus} aria-hidden="true">
+                <PlusIcon />
+              </span>
+            </button>
           )}
-          <span className={styles.savePreviewPlus} aria-hidden="true">
-            <PlusIcon />
-          </span>
-        </button>
-      )}
 
-      <div className={styles.divider} />
+          <div className={styles.divider} />
 
-      <div className={styles.row}>
-        <button
-          type="button"
-          className={styles.button}
-          onClick={handleExport}
-          disabled={!activeLibrary || items.length === 0}
-          title="Export library as .scribblylib"
-        >
-          <DownloadIcon />
-          Export
-        </button>
-        <button
-          type="button"
-          className={styles.button}
-          onClick={handleImportClick}
-          title="Import a .scribblylib file"
-        >
-          <UploadIcon />
-          Import
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".scribblylib,application/json"
-          style={{ display: "none" }}
-          onChange={handleFileInput}
-          multiple
-        />
-      </div>
+          <div className={styles.row}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={handleExport}
+              disabled={!activeLibrary || items.length === 0}
+              title="Export library as .scribblylib"
+            >
+              <DownloadIcon />
+              Export
+            </button>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={handleImportClick}
+              title="Import a .scribblylib file"
+            >
+              <UploadIcon />
+              Import
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".scribblylib,application/json"
+              style={{ display: "none" }}
+              onChange={handleFileInput}
+              multiple
+            />
+          </div>
 
-      <button
-        type="button"
-        className={`${styles.button} ${styles.submitButton}`}
-        onClick={handleOpenSubmit}
-        disabled={!activeLibrary || items.length === 0}
-        title={
-          activeLibrary && items.length > 0
-            ? "Share this library in the public gallery"
-            : "Add at least one item before submitting"
-        }
-      >
-        <ShareIcon />
-        Submit to gallery
-      </button>
-      <div className={styles.submitHelp}>
-        Share your library with everyone — a maintainer reviews it on GitHub.
-      </div>
-
-      <div className={styles.divider} />
-
-      <div className={styles.section}>
-        <div className={styles.label}>Library key (same key = same libraries)</div>
-        <div className={styles.keyRow}>
-          <input
-            type="text"
-            className={styles.keyInput}
-            value={keyDraft}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            spellCheck={false}
-            aria-label="Library key"
-          />
           <button
             type="button"
-            className={styles.iconBtn}
-            onClick={copyKey}
-            title="Copy key"
-            aria-label="Copy key"
+            className={`${styles.button} ${styles.submitButton}`}
+            onClick={handleOpenSubmit}
+            disabled={!activeLibrary || items.length === 0}
+            title={
+              activeLibrary && items.length > 0
+                ? "Share this library in the public gallery"
+                : "Add at least one item before submitting"
+            }
           >
-            <CopyIcon />
+            <ShareIcon />
+            Submit to gallery
           </button>
-          <button
-            type="button"
-            className={styles.iconBtn}
-            onClick={applyKeyPaste}
-            title="Apply pasted key"
-            aria-label="Apply pasted key"
-            disabled={keyDraft.trim() === ownerKey || keyDraft.trim().length === 0}
-          >
-            <CheckIcon />
-          </button>
-        </div>
-        <div className={styles.keyHelp}>
-          Paste your key on another device to access the same libraries. Anyone
-          with the key has full read/write — keep it private.
-        </div>
-      </div>
-      </>
+          <div className={styles.submitHelp}>
+            Share your library with everyone — a maintainer reviews it before
+            it goes live.
+          </div>
+
+          <div className={styles.divider} />
+
+          <div className={styles.section}>
+            <div className={styles.label}>
+              Library key (same key = same libraries)
+            </div>
+            <div className={styles.keyRow}>
+              <input
+                type="text"
+                className={styles.keyInput}
+                value={keyDraft}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                spellCheck={false}
+                aria-label="Library key"
+              />
+              <button
+                type="button"
+                className={styles.iconBtn}
+                onClick={copyKey}
+                title="Copy key"
+                aria-label="Copy key"
+              >
+                <CopyIcon />
+              </button>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                onClick={applyKeyPaste}
+                title="Apply pasted key"
+                aria-label="Apply pasted key"
+                disabled={
+                  keyDraft.trim() === ownerKey || keyDraft.trim().length === 0
+                }
+              >
+                <CheckIcon />
+              </button>
+            </div>
+            <div className={styles.keyHelp}>
+              {session.userId
+                ? "Signed in — your libraries follow your account automatically. The key still works for sharing with devices that aren't signed in."
+                : "Paste your key on another device to access the same libraries. Anyone with the key has full read/write — keep it private."}
+            </div>
+          </div>
+        </>
       )}
 
       {toast && <div className={styles.toast}>{toast}</div>}
@@ -707,11 +797,47 @@ function SidebarBody({
         }}
       />
 
-      <SubmitLibraryDialog
-        open={submitOpen}
-        library={activeLibrary}
-        items={items}
-        onClose={() => setSubmitOpen(false)}
+      <PublishLibraryDialog
+        open={publishState !== null}
+        library={publishState?.mode === "edit" ? null : activeLibrary}
+        items={publishState?.mode === "edit" ? [] : items}
+        session={session}
+        existing={publishState?.mode === "edit" ? publishState.entry : null}
+        onClose={() => setPublishState(null)}
+        onPublished={(message) => {
+          setToast(message);
+          setTab("submissions");
+        }}
+      />
+
+      <SignInDialog
+        open={signInReason !== null}
+        reason={signInReason}
+        onClose={() => setSignInReason(null)}
+      />
+
+      <ConfirmDialog
+        open={migrationOpen}
+        title="Move libraries to your account?"
+        message={`You have ${migrationCandidates.length} local librar${
+          migrationCandidates.length === 1 ? "y" : "ies"
+        } on this device. Move ${
+          migrationCandidates.length === 1 ? "it" : "them"
+        } to your account so they sync across your devices automatically?`}
+        confirmLabel="Move to account"
+        cancelLabel="Not now"
+        onCancel={() => {
+          if (session.userId) dismissMigration(session.userId);
+          setMigrationOpen(false);
+        }}
+        onConfirm={() => {
+          if (session.userId) {
+            migrateLibrariesToAccount(migrationCandidates, session.userId);
+            dismissMigration(session.userId);
+          }
+          setMigrationOpen(false);
+          setToast("Libraries moved to your account");
+        }}
       />
     </div>
   );

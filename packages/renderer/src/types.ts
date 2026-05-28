@@ -69,6 +69,11 @@ export type EllipseElement = BaseElementFields & { type: "ellipse" };
 export type LineElement = BaseElementFields & {
   type: "line";
   points: ElementPoint[];
+  // True when the polyline is treated as a closed polygon — first vertex
+  // and last vertex are connected, and the interior is fillable via
+  // backgroundColor + fillStyle. Set when the line tool auto-merges a
+  // cycle of connected segments into one shape. Absent = false.
+  closed?: boolean;
 };
 export type ArrowElement = BaseElementFields & {
   type: "arrow";

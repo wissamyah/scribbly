@@ -57,17 +57,3 @@ export function downloadLibraryFile(
     json,
   );
 }
-
-// Same payload as downloadLibraryFile, but saved with a `.json` extension.
-// GitHub's issue attachment uploader rejects unknown extensions like
-// `.scribblylib`, so the submission flow uses this variant. Round-trip is
-// safe: importLibrary parses any JSON text and the file's `type` field is
-// what actually identifies it as a Scribbly library.
-export function downloadLibraryFileAsJson(
-  library: ScribblyLibrary,
-  items: readonly LibraryItem[],
-): void {
-  const file = buildLibraryFile(library, items);
-  const json = JSON.stringify(file, null, 2);
-  triggerDownload(`${sanitizeFilename(library.name)}.scribblylib.json`, json);
-}

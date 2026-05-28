@@ -14,7 +14,8 @@ The app is called **Scribbly**. Do not use the name of any other drawing app in 
 - Every drawn element must include a `seed` (integer) for Rough.js reproducibility.
 - Debounce DB writes 300ms. Never write on every mouse move event.
 - No Firebase, no Socket.io, no Workbox, no service workers.
-- No authentication. Room ID from URL param `?room=<id>` is the only access control.
+- No authentication **for the canvas/rooms**. Room ID from URL param `?room=<id>` is the only access control there.
+  - **Exception (scoped):** the community **library gallery** uses InstantDB magic-code sign-in — required only to submit/manage/report libraries. Browse + install stay open. Admin actions are gated by an email allowlist in `instant.perms.ts`. See PLAN.md "Library Gallery (web-based…)".
 
 ## Stack
 React 19 + TypeScript + Vite + Rough.js + InstantDB + Zustand + SASS. See PLAN.md for full dependency list.

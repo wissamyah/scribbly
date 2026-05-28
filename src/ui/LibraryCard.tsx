@@ -1,28 +1,21 @@
 import { useMemo } from "react";
 
-import {
-  reportLibraryIssueUrl,
-  viewSourceUrl,
-} from "../libraries/marketplace/links";
-import type { ManifestEntry } from "../libraries/marketplace/types";
+import type { GalleryLibrary } from "../libraries/gallery/types";
 import styles from "./LibrarySidebar.module.scss";
 
 export type InstallState =
   | { kind: "not-installed" }
-  | { kind: "installed"; version: string }
-  | { kind: "update-available"; installed: string; available: string };
+  | { kind: "installed"; version: number }
+  | { kind: "update-available"; installed: number; available: number };
 
 type Props = {
-  entry: ManifestEntry;
+  entry: GalleryLibrary;
   state: InstallState;
   onInstall: () => void;
+  onReport: () => void;
 };
 
-export function LibraryCard({ entry, state, onInstall }: Props) {
-  // Author URL is "https://github.com/<handle>" — only render the link
-  // when the handle looks like a real GitHub login. First-party entries
-  // (handle: "scribbly") fail this check until/unless a real org is set up.
-  const author = entry.author.displayName ?? entry.author.handle;
+export function LibraryCard({ entry, state, onInstall, onReport }: Props) {
   const tags = useMemo(() => entry.tags.slice(0, 3), [entry.tags]);
 
   const installLabel =
@@ -44,18 +37,25 @@ export function LibraryCard({ entry, state, onInstall }: Props) {
   return (
     <div className={styles.card}>
       <div className={styles.cardThumb}>
-        <img src={entry.preview} alt={entry.name} loading="lazy" />
+        {entry.coverPreview ? (
+          <img src={entry.coverPreview} alt={entry.name} loading="lazy" />
+        ) : (
+          <span>{entry.name}</span>
+        )}
       </div>
       <div className={styles.cardBody}>
         <div className={styles.cardHeader}>
           <div className={styles.cardName}>{entry.name}</div>
-          <span className={styles.cardLicense} title={`License: ${entry.license}`}>
+          <span
+            className={styles.cardLicense}
+            title={`License: ${entry.license}`}
+          >
             {entry.license}
           </span>
         </div>
         <div className={styles.cardDescription}>{entry.description}</div>
         <div className={styles.cardMeta}>
-          <span>by {author}</span>
+          <span>by {entry.authorHandle}</span>
           <span>·</span>
           <span>
             {entry.itemCount} item{entry.itemCount === 1 ? "" : "s"}
@@ -82,24 +82,14 @@ export function LibraryCard({ entry, state, onInstall }: Props) {
           >
             {installLabel}
           </button>
-          <a
+          <button
+            type="button"
             className={styles.cardLink}
-            href={viewSourceUrl(entry)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="View source on GitHub"
-          >
-            Source
-          </a>
-          <a
-            className={styles.cardLink}
-            href={reportLibraryIssueUrl(entry)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Report this library on GitHub"
+            onClick={onReport}
+            title="Report this library"
           >
             Report
-          </a>
+          </button>
         </div>
       </div>
     </div>

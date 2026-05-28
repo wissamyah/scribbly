@@ -56,6 +56,7 @@ type ElementRow = {
   startArrowhead?: string;
   endArrowhead?: string;
   containerId?: string;
+  closed?: boolean;
   ciphertext?: string;
   iv?: string;
 };
@@ -131,7 +132,7 @@ function rowToElement(row: ElementRow): ScribblyElement | null {
     case "ellipse":
       return { ...base, type: "ellipse" };
     case "line":
-      return { ...base, type: "line", points };
+      return { ...base, type: "line", points, closed: row.closed ?? false };
     case "arrow":
       return {
         ...base,

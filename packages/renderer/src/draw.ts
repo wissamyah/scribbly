@@ -170,6 +170,14 @@ export function drawLine(
 ): void {
   if (el.points.length < 2) return;
   const opts = strokeOptions(el, theme);
+  // Closed polylines render as a single Rough polygon so the fill
+  // (hachure/cross-hatch/solid) applies inside and the strokes join
+  // cleanly at the seam between last → first point.
+  if (el.closed && el.points.length >= 3) {
+    const poly = el.points.map(([x, y]) => [x, y] as [number, number]);
+    rc.polygon(poly, { ...opts, ...fillOptions(el) });
+    return;
+  }
   for (let i = 0; i < el.points.length - 1; i++) {
     const a = el.points[i];
     const b = el.points[i + 1];
