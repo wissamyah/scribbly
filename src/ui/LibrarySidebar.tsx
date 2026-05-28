@@ -46,8 +46,10 @@ import styles from "./LibrarySidebar.module.scss";
 function BookIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z" />
-      <path d="M4 17a3 3 0 0 1 3-3h11" />
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
     </svg>
   );
 }
@@ -126,6 +128,25 @@ function CheckIcon() {
   );
 }
 
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
 type Props = {
   roomId: string;
 };
@@ -140,6 +161,26 @@ export function LibrarySidebar({ roomId }: Props) {
   const { libraries } = useLibraries(ownerKey, session.userId);
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(null);
 
+  // Keep the drawer mounted briefly after `open` flips to false so the
+  // slide-out animation can play before it unmounts.
+  const [mounted, setMounted] = useState(open);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setClosing(false);
+      return;
+    }
+    if (!mounted) return;
+    setClosing(true);
+    const t = setTimeout(() => {
+      setMounted(false);
+      setClosing(false);
+    }, 220);
+    return () => clearTimeout(t);
+  }, [open, mounted]);
+
   useEffect(() => {
     if (libraries.length === 0) {
       if (activeLibraryId !== null) setActiveLibraryId(null);
@@ -153,40 +194,32 @@ export function LibrarySidebar({ roomId }: Props) {
     }
   }, [libraries, activeLibraryId]);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className={styles.trigger}
-        onClick={() => setOpen(true)}
-        title="Library"
-        aria-label="Open library"
-      >
-        <BookIcon />
-      </button>
-    );
-  }
-
   return (
     <>
-      <button
-        type="button"
-        className={`${styles.trigger} ${styles.active}`}
-        onClick={() => setOpen(false)}
-        title="Library"
-        aria-label="Close library"
-      >
-        <BookIcon />
-      </button>
-      <SidebarBody
-        roomId={roomId}
-        ownerKey={ownerKey}
-        session={session}
-        libraries={libraries}
-        activeLibraryId={activeLibraryId}
-        setActiveLibraryId={setActiveLibraryId}
-        onClose={() => setOpen(false)}
-      />
+      {!open && (
+        <button
+          type="button"
+          className={styles.trigger}
+          onClick={() => setOpen(true)}
+          title="Library"
+          aria-label="Open library"
+        >
+          <BookIcon />
+          <span className={styles.triggerLabel}>Library</span>
+        </button>
+      )}
+      {mounted && (
+        <SidebarBody
+          roomId={roomId}
+          ownerKey={ownerKey}
+          session={session}
+          libraries={libraries}
+          activeLibraryId={activeLibraryId}
+          setActiveLibraryId={setActiveLibraryId}
+          closing={closing}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -198,6 +231,7 @@ type SidebarBodyProps = {
   libraries: ReturnType<typeof useLibraries>["libraries"];
   activeLibraryId: string | null;
   setActiveLibraryId: (id: string | null) => void;
+  closing: boolean;
   onClose: () => void;
 };
 
@@ -215,6 +249,7 @@ function SidebarBody({
   libraries,
   activeLibraryId,
   setActiveLibraryId,
+  closing,
   onClose,
 }: SidebarBodyProps) {
   const pendingGallerySlug = useAppState((s) => s.pendingGallerySlug);
@@ -254,6 +289,9 @@ function SidebarBody({
   const [keyDraft, setKeyDraft] = useState(ownerKey);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [libMenuOpen, setLibMenuOpen] = useState(false);
+  const libMenuRef = useRef<HTMLDivElement>(null);
   const [promptConfig, setPromptConfig] = useState<{
     title: string;
     message?: string;
@@ -304,6 +342,52 @@ function SidebarBody({
     const t = setTimeout(() => setToast(null), 1800);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Escape closes the drawer, but only when no nested dialog is open — those
+  // own the key while visible so the user can dismiss them first. An open
+  // library dropdown swallows the first Escape so it closes before the drawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (
+        promptConfig ||
+        confirmConfig ||
+        publishState ||
+        signInReason ||
+        migrationOpen
+      )
+        return;
+      if (libMenuOpen) {
+        setLibMenuOpen(false);
+        return;
+      }
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    promptConfig,
+    confirmConfig,
+    publishState,
+    signInReason,
+    migrationOpen,
+    libMenuOpen,
+    onClose,
+  ]);
+
+  // Dismiss the library dropdown on outside click, and whenever the tab changes.
+  useEffect(() => {
+    if (!libMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (libMenuRef.current && !libMenuRef.current.contains(e.target as Node)) {
+        setLibMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [libMenuOpen]);
+
+  useEffect(() => setLibMenuOpen(false), [tab]);
 
   const handleNewLibrary = () => {
     const id = createLibrary({
@@ -460,15 +544,27 @@ function SidebarBody({
   };
 
   return (
-    <div
+    <aside
       ref={panelRef}
-      className={`${styles.panel} ${dragOver ? styles.dragOver : ""}`}
+      role="dialog"
+      aria-label="Library"
+      className={`${styles.panel} ${closing ? styles.closing : ""} ${
+        dragOver ? styles.dragOver : ""
+      }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className={styles.header}>
-        <div className={styles.title}>Library</div>
+        <div className={styles.brand}>
+          <span className={styles.brandBadge} aria-hidden="true">
+            <BookIcon />
+          </span>
+          <span className={styles.brandText}>
+            <span className={styles.title}>Library</span>
+            <span className={styles.subtitle}>Your shape collections</span>
+          </span>
+        </div>
         <button
           type="button"
           className={styles.closeBtn}
@@ -479,10 +575,12 @@ function SidebarBody({
         </button>
       </div>
 
-      <div className={styles.headerRow}>
+      <div className={styles.account}>
         <AccountControl
           session={session}
-          onSignIn={() => requireSignIn("Sign in to publish and manage libraries.")}
+          onSignIn={() =>
+            requireSignIn("Sign in to publish and manage libraries.")
+          }
         />
       </div>
 
@@ -494,7 +592,7 @@ function SidebarBody({
           className={`${styles.tab} ${tab === "my" ? styles.tabActive : ""}`}
           onClick={() => setTab("my")}
         >
-          My libraries
+          Mine
         </button>
         <button
           type="button"
@@ -513,7 +611,7 @@ function SidebarBody({
             className={`${styles.tab} ${tab === "submissions" ? styles.tabActive : ""}`}
             onClick={() => setTab("submissions")}
           >
-            Submissions
+            Submitted
           </button>
         )}
         {isAdmin && (
@@ -529,243 +627,325 @@ function SidebarBody({
         )}
       </div>
 
-      {tab === "browse" ? (
-        <BrowseTab
-          ownerKey={ownerKey}
-          session={session}
-          installedLibraries={libraries}
-          onInstalled={(id) => {
-            setTab("my");
-            setActiveLibraryId(id);
-          }}
-          onSubmitClick={handleOpenSubmit}
-          requireSignIn={requireSignIn}
-          initialSlug={pendingGallerySlug}
-          onInitialSlugConsumed={clearPendingGallerySlug}
-        />
-      ) : tab === "submissions" ? (
-        <MySubmissions
-          session={session}
-          onEdit={(entry) => setPublishState({ mode: "edit", entry })}
-        />
-      ) : tab === "review" ? (
-        <ReviewQueue enabled={isAdmin} />
-      ) : (
-        <>
-          <div className={styles.row}>
-            <select
-              className={styles.select}
-              value={activeLibraryId ?? ""}
-              onChange={(e) => setActiveLibraryId(e.target.value || null)}
-              disabled={libraries.length === 0}
+      {tab === "my" && (
+        <div className={styles.switcherBar} ref={libMenuRef}>
+          <div className={styles.switcher}>
+            <button
+              type="button"
+              className={styles.switcherBtn}
+              onClick={() => setLibMenuOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={libMenuOpen}
             >
-              {libraries.length === 0 && (
-                <option value="">No libraries yet</option>
+              <span className={styles.switcherName}>
+                {activeLibrary ? activeLibrary.name : "No libraries yet"}
+              </span>
+              {activeLibrary && (
+                <span className={styles.switcherCount}>
+                  {items.length} item{items.length === 1 ? "" : "s"}
+                </span>
               )}
-              {libraries.map((lib) => (
-                <option key={lib.id} value={lib.id}>
-                  {lib.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onClick={handleNewLibrary}
-              title="New library"
-              aria-label="New library"
-            >
-              <PlusIcon />
+              <span className={styles.switcherChevron} aria-hidden="true">
+                <ChevronIcon />
+              </span>
             </button>
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onClick={handleRenameLibrary}
-              title="Rename library"
-              aria-label="Rename library"
-              disabled={!activeLibrary}
-            >
-              <PencilIcon />
-            </button>
-            <button
-              type="button"
-              className={styles.iconBtn}
-              onClick={handleDeleteLibrary}
-              title="Delete library"
-              aria-label="Delete library"
-              disabled={!activeLibrary}
-            >
-              <TrashIcon />
-            </button>
-          </div>
-
-          <div className={styles.section}>
-            <div className={styles.label}>Items</div>
-            {items.length === 0 ? (
-              <div className={styles.empty}>
-                {activeLibrary
-                  ? "Select shapes on the canvas, then click “Save selection” below."
-                  : "Create a library to start saving shapes."}
-              </div>
-            ) : (
-              <div className={styles.itemsGrid}>
-                {items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={styles.itemTile}
-                    title={`${item.name} — click to insert`}
-                    onClick={() => insertItem(item)}
-                  >
-                    {item.preview ? (
-                      <img
-                        src={item.preview}
-                        alt={item.name}
-                        draggable={false}
-                      />
-                    ) : (
-                      <span>{item.name}</span>
-                    )}
-                    <span
-                      role="button"
-                      tabIndex={-1}
-                      className={styles.itemRemove}
-                      title="Remove from library"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmConfig({
-                          title: "Remove item",
-                          message: `Remove "${item.name}" from this library?`,
-                          confirmLabel: "Remove",
-                          tone: "danger",
-                          onConfirm: () => deleteLibraryItem(item.id),
-                        });
+            {libMenuOpen && (
+              <div className={styles.switcherMenu} role="listbox">
+                <div className={styles.switcherList}>
+                  {libraries.length === 0 && (
+                    <div className={styles.switcherEmpty}>No libraries yet</div>
+                  )}
+                  {libraries.map((lib) => (
+                    <button
+                      key={lib.id}
+                      type="button"
+                      role="option"
+                      aria-selected={lib.id === activeLibraryId}
+                      className={`${styles.switcherOption} ${
+                        lib.id === activeLibraryId
+                          ? styles.switcherOptionActive
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setActiveLibraryId(lib.id);
+                        setLibMenuOpen(false);
                       }}
                     >
-                      ×
-                    </span>
-                  </button>
-                ))}
+                      <span className={styles.switcherOptionName}>
+                        {lib.name}
+                      </span>
+                      {lib.id === activeLibraryId && (
+                        <span className={styles.switcherTick} aria-hidden="true">
+                          <CheckIcon />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={styles.switcherNew}
+                  onClick={() => {
+                    handleNewLibrary();
+                    setLibMenuOpen(false);
+                  }}
+                >
+                  <PlusIcon />
+                  New library
+                </button>
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={handleRenameLibrary}
+            title="Rename library"
+            aria-label="Rename library"
+            disabled={!activeLibrary}
+          >
+            <PencilIcon />
+          </button>
+          <button
+            type="button"
+            className={`${styles.iconBtn} ${styles.danger}`}
+            onClick={handleDeleteLibrary}
+            title="Delete library"
+            aria-label="Delete library"
+            disabled={!activeLibrary}
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      )}
 
+      <div className={styles.body}>
+        {tab === "browse" ? (
+          <BrowseTab
+            ownerKey={ownerKey}
+            session={session}
+            installedLibraries={libraries}
+            onInstalled={(id) => {
+              setTab("my");
+              setActiveLibraryId(id);
+            }}
+            onSubmitClick={handleOpenSubmit}
+            requireSignIn={requireSignIn}
+            initialSlug={pendingGallerySlug}
+            onInitialSlugConsumed={clearPendingGallerySlug}
+          />
+        ) : tab === "submissions" ? (
+          <MySubmissions
+            session={session}
+            onEdit={(entry) => setPublishState({ mode: "edit", entry })}
+          />
+        ) : tab === "review" ? (
+          <ReviewQueue enabled={isAdmin} />
+        ) : (
+          <div className={styles.myTab}>
+            <div className={styles.section}>
+              <div className={styles.sectionHead}>
+                <span className={styles.label}>Items</span>
+                {items.length > 0 && (
+                  <span className={styles.count}>{items.length}</span>
+                )}
+              </div>
+              {items.length === 0 ? (
+                <div className={styles.empty}>
+                  <span className={styles.emptyArt} aria-hidden="true">
+                    <GridIcon />
+                  </span>
+                  <span>
+                    {activeLibrary
+                      ? "No items yet — select shapes on the canvas and save them with the bar below."
+                      : "Create a library to start saving shapes."}
+                  </span>
+                </div>
+              ) : (
+                <div className={styles.itemsGrid}>
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={styles.itemTile}
+                      title={`${item.name} — click to insert`}
+                      onClick={() => insertItem(item)}
+                    >
+                      {item.preview ? (
+                        <img
+                          src={item.preview}
+                          alt={item.name}
+                          draggable={false}
+                        />
+                      ) : (
+                        <span>{item.name}</span>
+                      )}
+                      <span className={styles.itemCaption}>{item.name}</span>
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        className={styles.itemRemove}
+                        title="Remove from library"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmConfig({
+                            title: "Remove item",
+                            message: `Remove "${item.name}" from this library?`,
+                            confirmLabel: "Remove",
+                            tone: "danger",
+                            onConfirm: () => deleteLibraryItem(item.id),
+                          });
+                        }}
+                      >
+                        ×
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.submitCard}>
+              <div className={styles.submitCardHead}>
+                <span className={styles.submitCardTitle}>Share with everyone</span>
+                <span className={styles.submitCardText}>
+                  Publish to the public gallery — a maintainer reviews it before
+                  it goes live.
+                </span>
+              </div>
+              <button
+                type="button"
+                className={styles.submitButton}
+                onClick={handleOpenSubmit}
+                disabled={!activeLibrary || items.length === 0}
+                title={
+                  activeLibrary && items.length > 0
+                    ? "Share this library in the public gallery"
+                    : "Add at least one item before submitting"
+                }
+              >
+                <ShareIcon />
+                Submit to gallery
+              </button>
+            </div>
+
+            <div className={styles.fileRow}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={handleImportClick}
+                title="Import a .scribblylib file"
+              >
+                <UploadIcon />
+                Import
+              </button>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={handleExport}
+                disabled={!activeLibrary || items.length === 0}
+                title="Export library as .scribblylib"
+              >
+                <DownloadIcon />
+                Export
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".scribblylib,application/json"
+                style={{ display: "none" }}
+                onChange={handleFileInput}
+                multiple
+              />
+            </div>
+
+            <div className={styles.section}>
+              <button
+                type="button"
+                className={styles.keyToggle}
+                onClick={() => setShowKey((v) => !v)}
+                aria-expanded={showKey}
+              >
+                <span>Sync key &amp; advanced</span>
+                <ChevronIcon />
+              </button>
+              {showKey && (
+                <div className={styles.keyPanel}>
+                  <div className={styles.keyRow}>
+                    <input
+                      type="text"
+                      className={styles.keyInput}
+                      value={keyDraft}
+                      onChange={(e) => setKeyDraft(e.target.value)}
+                      spellCheck={false}
+                      aria-label="Library key"
+                    />
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      onClick={copyKey}
+                      title="Copy key"
+                      aria-label="Copy key"
+                    >
+                      <CopyIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      onClick={applyKeyPaste}
+                      title="Apply pasted key"
+                      aria-label="Apply pasted key"
+                      disabled={
+                        keyDraft.trim() === ownerKey ||
+                        keyDraft.trim().length === 0
+                      }
+                    >
+                      <CheckIcon />
+                    </button>
+                  </div>
+                  <div className={styles.keyHelp}>
+                    {session.userId
+                      ? "Signed in — your libraries follow your account automatically. The key still works for sharing with devices that aren't signed in."
+                      : "Same key = same libraries. Paste your key on another device to access these libraries. Anyone with the key has full read/write — keep it private."}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {tab === "my" && (
+        <div className={styles.saveBar}>
           {selectedElements.length === 0 ? (
-            <div className={styles.savePreviewEmpty}>
-              Select shapes on the canvas to save them here
+            <div className={styles.saveBarHint}>
+              <span className={styles.saveBarHintIcon} aria-hidden="true">
+                <PlusIcon />
+              </span>
+              <span>Select shapes on the canvas to save them</span>
             </div>
           ) : (
             <button
               type="button"
-              className={styles.savePreview}
+              className={styles.saveBarAction}
               onClick={handleSaveSelection}
               title="Add selection to library"
-              aria-label="Add selection to library"
             >
-              {selectionPreview && (
-                <img src={selectionPreview} alt="" draggable={false} />
-              )}
-              <span className={styles.savePreviewPlus} aria-hidden="true">
+              <span className={styles.saveBarThumb}>
+                {selectionPreview && (
+                  <img src={selectionPreview} alt="" draggable={false} />
+                )}
+              </span>
+              <span className={styles.saveBarLabel}>
+                Save {selectedElements.length} shape
+                {selectedElements.length === 1 ? "" : "s"}
+              </span>
+              <span className={styles.saveBarPlus} aria-hidden="true">
                 <PlusIcon />
               </span>
             </button>
           )}
-
-          <div className={styles.divider} />
-
-          <div className={styles.row}>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={handleExport}
-              disabled={!activeLibrary || items.length === 0}
-              title="Export library as .scribblylib"
-            >
-              <DownloadIcon />
-              Export
-            </button>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={handleImportClick}
-              title="Import a .scribblylib file"
-            >
-              <UploadIcon />
-              Import
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".scribblylib,application/json"
-              style={{ display: "none" }}
-              onChange={handleFileInput}
-              multiple
-            />
-          </div>
-
-          <button
-            type="button"
-            className={`${styles.button} ${styles.submitButton}`}
-            onClick={handleOpenSubmit}
-            disabled={!activeLibrary || items.length === 0}
-            title={
-              activeLibrary && items.length > 0
-                ? "Share this library in the public gallery"
-                : "Add at least one item before submitting"
-            }
-          >
-            <ShareIcon />
-            Submit to gallery
-          </button>
-          <div className={styles.submitHelp}>
-            Share your library with everyone — a maintainer reviews it before
-            it goes live.
-          </div>
-
-          <div className={styles.divider} />
-
-          <div className={styles.section}>
-            <div className={styles.label}>
-              Library key (same key = same libraries)
-            </div>
-            <div className={styles.keyRow}>
-              <input
-                type="text"
-                className={styles.keyInput}
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                spellCheck={false}
-                aria-label="Library key"
-              />
-              <button
-                type="button"
-                className={styles.iconBtn}
-                onClick={copyKey}
-                title="Copy key"
-                aria-label="Copy key"
-              >
-                <CopyIcon />
-              </button>
-              <button
-                type="button"
-                className={styles.iconBtn}
-                onClick={applyKeyPaste}
-                title="Apply pasted key"
-                aria-label="Apply pasted key"
-                disabled={
-                  keyDraft.trim() === ownerKey || keyDraft.trim().length === 0
-                }
-              >
-                <CheckIcon />
-              </button>
-            </div>
-            <div className={styles.keyHelp}>
-              {session.userId
-                ? "Signed in — your libraries follow your account automatically. The key still works for sharing with devices that aren't signed in."
-                : "Paste your key on another device to access the same libraries. Anyone with the key has full read/write — keep it private."}
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {toast && <div className={styles.toast}>{toast}</div>}
@@ -839,6 +1019,6 @@ function SidebarBody({
           setToast("Libraries moved to your account");
         }}
       />
-    </div>
+    </aside>
   );
 }

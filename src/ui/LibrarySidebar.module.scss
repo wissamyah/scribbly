@@ -1,9 +1,16 @@
+/* =========================================================================
+   Library — left side drawer ("studio sketchbook" aesthetic)
+   Shared module: also consumed by BrowseTab, LibraryCard, MySubmissions,
+   ReviewQueue. Class names used by those files must be preserved.
+   ========================================================================= */
+
+/* --- Floating trigger (top-left toolbar row) --------------------------- */
+
 .trigger {
   position: fixed;
   top: 16px;
   left: 96px;
   appearance: none;
-  width: 36px;
   height: 36px;
   border-radius: 8px;
   background: transparent;
@@ -11,11 +18,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   color: var(--text-2);
   cursor: pointer;
   z-index: 11;
-  padding: 0;
+  padding: 0 10px 0 8px;
   transition: background 120ms ease, color 120ms ease;
+
+  .triggerLabel {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--text-3, var(--text-2));
+  }
 
   svg {
     width: 20px;
@@ -38,43 +53,157 @@
   }
 }
 
-.panel {
-  position: fixed;
-  top: 72px;
-  right: 16px;
-  width: 304px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-1);
-  border-radius: 12px;
-  box-shadow: var(--shadow-md);
-  z-index: 11;
-  font-family: system-ui, -apple-system, sans-serif;
-  font-size: 12px;
-  color: var(--text-1);
-  user-select: none;
-  max-height: calc(100vh - 72px - 32px);
-  overflow-y: auto;
+/* --- Drawer shell ------------------------------------------------------- */
 
-  &.dragOver {
-    outline: 2px dashed var(--accent-ring);
-    outline-offset: -2px;
+@keyframes drawerIn {
+  from {
+    transform: translateX(-104%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
+
+@keyframes drawerOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-104%);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel {
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 364px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border-right: 1px solid var(--border-1);
+  box-shadow: var(--shadow-drawer);
+  z-index: 30;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--text-1);
+  user-select: none;
+  will-change: transform;
+  animation: drawerIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  &.closing {
+    animation: drawerOut 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    pointer-events: none;
+  }
+
+  &.dragOver::after {
+    content: "Drop .scribblylib to import";
+    position: absolute;
+    inset: 10px;
+    border: 2px dashed var(--accent);
+    border-radius: 16px;
+    background: var(--surface-accent);
+    color: var(--accent-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 60;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .panel.closing {
+    animation: none;
+  }
+}
+
+/* --- Identity header ---------------------------------------------------- */
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 18px 16px 16px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    158deg,
+    var(--surface-accent) 0%,
+    var(--surface-1) 72%
+  );
+  border-bottom: 1px solid var(--border-1);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brandBadge {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(140deg, var(--accent), var(--accent-muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px var(--accent-ring);
+
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .title {
-  font-weight: 600;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+
+.subtitle {
+  font-size: 11.5px;
+  color: var(--text-3);
+  letter-spacing: 0.01em;
+  margin-top: 1px;
 }
 
 .closeBtn {
@@ -83,12 +212,14 @@
   border: none;
   color: var(--text-3);
   cursor: pointer;
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
+  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background 120ms ease, color 120ms ease;
 
   &:hover {
     background: var(--surface-hover);
@@ -96,84 +227,381 @@
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     stroke: currentColor;
     stroke-width: 2;
     fill: none;
+    stroke-linecap: round;
   }
+}
+
+.account {
+  padding: 12px 16px 8px;
+  flex-shrink: 0;
+}
+
+/* --- Icon tab rail ------------------------------------------------------ */
+
+.tabBar {
+  display: flex;
+  gap: 4px;
+  margin: 4px 16px 8px;
+  padding: 4px;
+  background: var(--surface-3);
+  border-radius: 13px;
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 9px 8px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 10px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+
+  &:hover {
+    color: var(--text-1);
+  }
+}
+
+.tabActive {
+  color: var(--accent-text);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+
+  &:hover {
+    color: var(--accent-text);
+  }
+}
+
+/* --- Library switcher (sticky sub-header, custom dropdown) -------------- */
+
+.switcherBar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+
+.switcher {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.switcherBtn {
+  width: 100%;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-1);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    border-color: var(--border-hover);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+}
+
+.switcherName {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcherCount {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.switcherChevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-3);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.switcherMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: 13px;
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+  z-index: 40;
+  animation: riseIn 140ms ease;
+}
+
+.switcherList {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switcherEmpty {
+  padding: 14px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.switcherOption {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  padding: 9px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-1);
+  text-align: left;
+  transition: background 110ms ease;
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.switcherOptionName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcherOptionActive {
+  background: var(--surface-accent);
+  color: var(--accent-text);
+
+  &:hover {
+    background: var(--surface-accent-hover);
+  }
+
+  .switcherOptionName {
+    font-weight: 650;
+  }
+}
+
+.switcherTick {
+  display: inline-flex;
+  color: var(--accent);
+
+  svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.switcherNew {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px;
+  border: none;
+  border-top: 1px solid var(--border-1);
+  border-radius: 0 0 8px 8px;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  transition: background 110ms ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &:hover {
+    background: var(--surface-accent);
+  }
+}
+
+/* --- Scroll body -------------------------------------------------------- */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
+
+  &::-webkit-scrollbar {
+    width: 10px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-hover);
+    border-radius: 5px;
+    border: 3px solid var(--surface-1);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+.myTab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: riseIn 200ms ease;
 }
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
-.row {
+.sectionHead {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 8px;
 }
 
 .label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-3);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
   letter-spacing: 0.02em;
 }
 
-.select,
-.input {
-  flex: 1;
-  appearance: none;
-  background: var(--surface-2);
-  border: 1px solid var(--border-1);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--text-1);
-  font-family: inherit;
-  min-width: 0;
-}
-
-.input:focus,
-.select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-ring);
+.count {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--surface-accent);
+  border-radius: 999px;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .iconBtn {
   appearance: none;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
+  border-radius: 11px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--text-2);
   cursor: pointer;
   flex-shrink: 0;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     stroke: currentColor;
     stroke-width: 1.8;
     fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--surface-hover);
     color: var(--text-1);
+    border-color: var(--border-hover);
   }
 
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  &.danger:hover:not(:disabled) {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-border);
   }
 }
 
@@ -181,9 +609,10 @@
   appearance: none;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
+  border-radius: 11px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-1);
   cursor: pointer;
   font-family: inherit;
@@ -191,47 +620,43 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
+  transition: background 120ms ease, border-color 120ms ease;
 
   svg {
-    width: 13px;
-    height: 13px;
+    width: 15px;
+    height: 15px;
     stroke: currentColor;
     fill: none;
     stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--surface-hover);
+    border-color: var(--border-hover);
   }
 
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.45;
     cursor: not-allowed;
   }
-
-  &.primary {
-    background: var(--accent);
-    color: var(--text-on-accent, #ffffff);
-    border-color: var(--accent);
-  }
-
-  &.primary:hover {
-    filter: brightness(1.05);
-  }
 }
+
+/* --- Items grid --------------------------------------------------------- */
 
 .itemsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 9px;
 }
 
 .itemTile {
   appearance: none;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 6px;
+  border-radius: 13px;
   padding: 0;
   aspect-ratio: 1;
   cursor: grab;
@@ -243,13 +668,18 @@
   color: var(--text-3);
   font-size: 10px;
   text-align: center;
+  transition: border-color 130ms ease, transform 130ms ease,
+    box-shadow 130ms ease;
 
   &:hover {
     border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
   }
 
   &:active {
     cursor: grabbing;
+    transform: translateY(-1px);
   }
 
   img {
@@ -258,94 +688,375 @@
     object-fit: contain;
     background: #ffffff;
     pointer-events: none;
+    padding: 8px;
   }
+}
+
+.itemCaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 6px 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.78), transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 130ms ease, transform 130ms ease;
+  pointer-events: none;
+}
+
+.itemTile:hover .itemCaption {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .itemRemove {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.45);
+  top: 5px;
+  right: 5px;
+  width: 21px;
+  height: 21px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(3px);
   color: #ffffff;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
-  display: none;
+  opacity: 0;
   align-items: center;
   justify-content: center;
+  display: flex;
+  transition: opacity 120ms ease, background 120ms ease;
+  z-index: 2;
+
+  &:hover {
+    background: var(--danger);
+  }
 }
 
 .itemTile:hover .itemRemove {
-  display: inline-flex;
+  opacity: 1;
 }
 
 .empty {
-  font-size: 11px;
-  color: var(--text-3);
-  padding: 12px 4px;
-  text-align: center;
-}
-
-.savePreview {
-  appearance: none;
-  background: var(--surface-2);
-  border: 1px dashed var(--border-1);
-  border-radius: 8px;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-  padding: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  transition: border-color 120ms ease;
-
-  img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    opacity: 0.35;
-    pointer-events: none;
-    transition: opacity 120ms ease;
-  }
-
-  &:hover {
-    border-color: #7c3aed;
-
-    img {
-      opacity: 0.55;
-    }
-
-    .savePreviewPlus {
-      transform: scale(1.06);
-    }
-  }
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+  padding: 26px 18px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1.5px dashed var(--border-dash);
+  border-radius: 14px;
 }
 
-.savePreviewPlus {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #7c3aed;
-  color: #ffffff;
+.emptyArt {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
-  transition: transform 120ms ease;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  color: var(--text-muted);
 
   svg {
     width: 22px;
     height: 22px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+  }
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-1);
+  margin: 0;
+}
+
+/* --- Submit-to-gallery callout ----------------------------------------- */
+
+.submitCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 16px;
+  background: linear-gradient(
+    140deg,
+    var(--surface-accent) 0%,
+    var(--surface-2) 80%
+  );
+  border: 1px solid var(--border-active);
+}
+
+.submitCardHead {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.submitCardTitle {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+
+.submitCardText {
+  font-size: 11.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.submitButton {
+  appearance: none;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 11px;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--accent);
+  box-shadow: 0 6px 16px var(--accent-ring);
+  transition: background 120ms ease, transform 120ms ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: var(--surface-1);
+    color: var(--text-disabled);
+    border-color: var(--border-1);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+}
+
+.fileRow {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+/* --- Library key (collapsible advanced) -------------------------------- */
+
+.keyToggle {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 180ms ease;
+  }
+
+  &[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  &:hover {
+    color: var(--text-1);
+  }
+}
+
+.keyPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 8px;
+  animation: riseIn 160ms ease;
+}
+
+.keyRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.keyInput {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: 11px;
+  padding: 10px 12px;
+  color: var(--text-1);
+  min-width: 0;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+}
+
+.keyHelp {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* --- Sticky contextual save bar ---------------------------------------- */
+
+.saveBar {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-1);
+  background: var(--surface-1);
+  box-shadow: 0 -6px 18px -12px rgba(15, 23, 42, 0.3);
+}
+
+.saveBarHint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.35;
+}
+
+.saveBarHintIcon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  color: var(--text-muted);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+}
+
+.saveBarAction {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 13px;
+  border: 1px solid var(--border-active);
+  background: linear-gradient(
+    135deg,
+    var(--surface-accent),
+    var(--surface-2)
+  );
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.saveBarThumb {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--border-1);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+  }
+}
+
+.saveBarLabel {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--accent-text-strong);
+}
+
+.saveBarPlus {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px var(--accent-ring);
+
+  svg {
+    width: 18px;
+    height: 18px;
     stroke: currentColor;
     fill: none;
     stroke-width: 2.4;
@@ -353,52 +1064,36 @@
   }
 }
 
-.savePreviewEmpty {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 1px dashed var(--border-1);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* --- Toast -------------------------------------------------------------- */
+
+.toast {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 11px 14px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  border-radius: 11px;
+  font-size: 12.5px;
+  font-weight: 500;
   text-align: center;
-  padding: 0 16px;
-  font-size: 11px;
-  color: var(--text-3);
+  box-shadow: var(--shadow-popover);
+  z-index: 50;
+  animation: riseIn 180ms ease;
 }
 
-.divider {
-  height: 1px;
-  background: var(--border-1);
-  margin: 4px 0;
-}
+/* =========================================================================
+   Browse tab (shared with BrowseTab.tsx)
+   ========================================================================= */
 
-.submitButton {
-  flex: none;
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--accent);
-  color: var(--text-on-accent, #ffffff);
-  border-color: var(--accent);
-  font-weight: 600;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.05);
-    background: var(--accent);
-  }
-
-  &:disabled {
-    background: var(--surface-2);
-    color: var(--text-3);
-    border-color: var(--border-1);
-  }
-}
-
-.submitHelp {
-  font-size: 10px;
-  color: var(--text-3);
-  line-height: 1.4;
-  margin-top: -4px;
+.browse {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+  animation: riseIn 200ms ease;
 }
 
 .browseSubmit {
@@ -406,17 +1101,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
-  background: var(--surface-2);
-  border: 1px dashed var(--border-1);
-  border-radius: 8px;
-  font-size: 11px;
+  padding: 12px 14px;
+  background: linear-gradient(
+    140deg,
+    var(--surface-accent),
+    var(--surface-2)
+  );
+  border: 1px solid var(--border-active);
+  border-radius: 13px;
+  font-size: 12px;
   color: var(--text-2);
-  line-height: 1.4;
+  line-height: 1.45;
 
   strong {
     color: var(--text-1);
-    font-weight: 600;
+    font-weight: 700;
+    font-family: var(--font-display);
   }
 }
 
@@ -424,121 +1124,69 @@
   appearance: none;
   background: transparent;
   border: none;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
   font-family: inherit;
   flex-shrink: 0;
+  white-space: nowrap;
 
   &:hover {
-    background: var(--surface-hover);
+    background: var(--surface-accent-hover);
   }
-}
-
-.keyRow {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.keyInput {
-  flex: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-1);
-  border-radius: 6px;
-  padding: 5px 8px;
-  color: var(--text-1);
-  min-width: 0;
-}
-
-.keyHelp {
-  font-size: 10px;
-  color: var(--text-3);
-  line-height: 1.4;
-}
-
-.toast {
-  font-size: 11px;
-  color: var(--accent);
-}
-
-/* --- Tab bar (My libraries / Browse) ----------------------------------- */
-
-.tabBar {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--border-1);
-}
-
-.tab {
-  background: transparent;
-  border: none;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--text-2);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-family: inherit;
-
-  &:hover {
-    color: var(--text-1);
-  }
-}
-
-.tabActive {
-  color: var(--text-1);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
-}
-
-/* --- Browse tab body --------------------------------------------------- */
-
-.browse {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  flex: 1;
 }
 
 .browseControls {
   display: flex;
-  gap: 6px;
+  gap: 7px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .browseSearch {
   flex: 1 1 140px;
-  font-size: 12px;
+  font-size: 13px;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 6px;
-  padding: 5px 8px;
+  border-radius: 11px;
+  padding: 10px 12px;
   color: var(--text-1);
   min-width: 0;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
 }
 
 .browseFilter {
-  font-size: 11px;
-  background: var(--surface-2);
+  appearance: none;
+  font-size: 12px;
+  background: var(--surface-2)
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  background-size: 13px;
   border: 1px solid var(--border-1);
-  border-radius: 6px;
-  padding: 4px 6px;
+  border-radius: 11px;
+  padding: 9px 28px 9px 11px;
   color: var(--text-1);
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
 }
 
 .browseStatus {
-  padding: 24px 8px;
+  padding: 34px 18px;
   text-align: center;
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--text-3);
   display: flex;
   flex-direction: column;
@@ -549,33 +1197,45 @@
 .browseList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
+  gap: 9px;
   min-height: 0;
 }
 
-/* --- Library card ------------------------------------------------------ */
+/* --- Library card ------------------------------------------------------- */
 
 .card {
   display: grid;
-  grid-template-columns: 84px 1fr;
-  gap: 10px;
-  padding: 10px;
+  grid-template-columns: 56px 1fr;
+  gap: 13px;
+  align-items: start;
+  padding: 12px;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 8px;
+  border-radius: 14px;
+  transition: border-color 130ms ease, box-shadow 130ms ease,
+    transform 130ms ease;
+
+  &:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
 }
 
 .cardThumb {
-  width: 84px;
-  height: 84px;
-  background: var(--surface-1);
+  width: 56px;
+  height: 56px;
+  background: #ffffff;
   border: 1px solid var(--border-1);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-3);
+  font-size: 10px;
+  text-align: center;
+  padding: 5px;
 
   img {
     max-width: 100%;
@@ -587,22 +1247,27 @@
 .cardBody {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .cardHeader {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   justify-content: space-between;
 }
 
 .cardName {
-  font-size: 13px;
-  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-1);
-  line-height: 1.2;
+  line-height: 1.3;
+  padding-right: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -614,25 +1279,25 @@
   letter-spacing: 0.04em;
   color: var(--text-3);
   border: 1px solid var(--border-1);
-  border-radius: 3px;
-  padding: 1px 4px;
+  border-radius: 6px;
+  padding: 2px 5px;
   flex: 0 0 auto;
 }
 
 .cardDescription {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-2);
-  line-height: 1.35;
+  line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .cardMeta {
   display: flex;
-  gap: 4px;
-  font-size: 10px;
+  gap: 5px;
+  font-size: 10.5px;
   color: var(--text-3);
   flex-wrap: wrap;
 }
@@ -644,20 +1309,21 @@
 }
 
 .cardTag {
-  font-size: 9px;
+  font-size: 9.5px;
   color: var(--text-2);
   background: var(--surface-1);
   border: 1px solid var(--border-1);
-  border-radius: 3px;
-  padding: 1px 5px;
+  border-radius: 6px;
+  padding: 2px 6px;
 }
 
 .installedBadge,
 .updateBadge {
   font-size: 10px;
-  padding: 3px 6px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 7px;
   width: fit-content;
+  font-weight: 600;
 }
 
 .installedBadge {
@@ -667,66 +1333,63 @@
 }
 
 .updateBadge {
-  background: rgba(60, 80, 220, 0.12);
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  background: var(--surface-accent);
+  color: var(--accent-text);
+  border: 1px solid var(--border-active);
 }
 
 .cardActions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 8px;
 }
 
 .installButton {
   background: var(--accent);
   color: #fff;
-  border: none;
-  border-radius: 5px;
-  padding: 4px 10px;
-  font-size: 11px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 11.5px;
   cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-weight: 650;
+  transition: background 120ms ease, transform 120ms ease;
 
   &:disabled {
     background: var(--surface-1);
     color: var(--text-3);
     cursor: not-allowed;
-    border: 1px solid var(--border-1);
+    border-color: var(--border-1);
   }
 
   &:hover:not(:disabled) {
-    filter: brightness(1.1);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    transform: translateY(-1px);
   }
 }
 
 .cardLink {
   appearance: none;
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: inherit;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-family: var(--font-display);
   cursor: pointer;
-  font-size: 10px;
-  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
   text-decoration: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 
   &:hover {
-    color: var(--accent);
-    text-decoration: underline;
+    background: var(--surface-hover);
+    color: var(--text-1);
+    border-color: var(--border-hover);
   }
-}
-
-/* --- Account control in header ----------------------------------------- */
-
-.headerRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 2px;
 }
 
 /* --- Submissions + review status badges -------------------------------- */
@@ -735,9 +1398,9 @@
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-weight: 600;
-  border-radius: 3px;
-  padding: 1px 5px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 6px;
   flex: 0 0 auto;
 }
 
@@ -748,44 +1411,44 @@
 }
 
 .statusPublished {
-  background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
-  border: 1px solid rgba(22, 163, 74, 0.4);
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
 }
 
 .statusRejected {
-  background: rgba(220, 38, 38, 0.12);
-  color: #b91c1c;
-  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
 }
 
 .rejectionNote {
-  font-size: 10px;
-  color: #b91c1c;
-  line-height: 1.4;
-  background: rgba(220, 38, 38, 0.08);
-  border-radius: 4px;
-  padding: 4px 6px;
+  font-size: 10.5px;
+  color: var(--danger-text);
+  line-height: 1.45;
+  background: var(--danger-bg);
+  border-radius: 8px;
+  padding: 6px 9px;
 }
 
 .reviewActions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .approveBtn {
   appearance: none;
-  background: #15803d;
+  background: var(--success-text);
   color: #fff;
   border: none;
-  border-radius: 5px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 500;
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  font-weight: 650;
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font-display);
 
   &:hover {
     filter: brightness(1.08);
@@ -795,51 +1458,53 @@
 .rejectBtn {
   appearance: none;
   background: var(--surface-1);
-  color: #b91c1c;
-  border: 1px solid rgba(220, 38, 38, 0.4);
-  border-radius: 5px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 500;
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  font-weight: 650;
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font-display);
 
   &:hover {
-    background: rgba(220, 38, 38, 0.08);
+    background: var(--danger-bg);
   }
 }
 
 .reportRow {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: 5px;
+  padding: 12px 14px;
   background: var(--surface-2);
   border: 1px solid var(--border-1);
-  border-radius: 8px;
+  border-radius: 13px;
 }
 
 .reportReason {
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-1);
 }
 
 .reportMeta {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-3);
   word-break: break-all;
 }
 
 .reportDetail {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-2);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .sectionTitle {
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text-1);
   margin-top: 4px;
 }
@@ -852,9 +1517,9 @@
 }
 
 .reviewItemTile {
-  background: var(--surface-1);
+  background: #ffffff;
   border: 1px solid var(--border-1);
-  border-radius: 6px;
+  border-radius: 9px;
   aspect-ratio: 1;
   overflow: hidden;
   display: flex;
@@ -863,12 +1528,11 @@
   color: var(--text-3);
   font-size: 9px;
   text-align: center;
-  padding: 2px;
+  padding: 3px;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    background: #ffffff;
   }
 }

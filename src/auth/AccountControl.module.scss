@@ -1,33 +1,85 @@
 .signIn {
   appearance: none;
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid var(--border-2);
-  border-radius: 7px;
-  background: var(--surface-1);
-  color: var(--text-1);
-  font-size: 12px;
-  font-weight: 500;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border-active);
+  border-radius: 12px;
+  background: linear-gradient(140deg, var(--surface-accent), var(--surface-2));
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 650;
   cursor: pointer;
   font-family: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
   &:hover {
-    background: var(--surface-2);
-    border-color: var(--border-hover);
+    border-color: var(--accent);
+    transform: translateY(-1px);
   }
 }
 
 .account {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--accent), var(--accent-muted));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  box-shadow: 0 3px 8px var(--accent-ring);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.2;
+}
+
+.identityLabel {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
 .email {
-  font-size: 12px;
-  color: var(--text-2);
-  max-width: 140px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -35,18 +87,32 @@
 
 .signOut {
   appearance: none;
-  border: none;
-  background: none;
-  color: var(--text-3);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+
+  svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
   &:hover {
-    color: var(--accent);
-    text-decoration: underline;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-border);
   }
 }
