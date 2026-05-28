@@ -265,6 +265,8 @@ export function Toolbar({ roomId }: ToolbarProps) {
 
   return (
     <div className={styles.toolbar}>
+      <span className={styles.wordmark}>Scribbly.</span>
+      <div className={styles.divider} aria-hidden="true" />
       <button
         type="button"
         className={`${styles.button} ${selectionLockState === "all" ? styles.active : ""}`}
